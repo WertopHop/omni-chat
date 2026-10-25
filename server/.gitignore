@@ -1,0 +1,5 @@
+# Rendered runtime configuration and secrets
+/generated/
+
+# Persistent volumes of the compose stack
+/data/

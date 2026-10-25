@@ -1,0 +1,202 @@
+name: omni-chat
+
+# Every chat backend service shares the same configuration file and the same
+# environment (secrets live in .env, see .env.example).
+x-chat-service: &chat-service
+  env_file:
+    - .env
+  volumes:
+    - ./generated/chat.toml:/Revolt.toml:ro
+  restart: always
+
+services:
+  # --- chat backend ---------------------------------------------------------
+  database:
+    image: docker.io/mongo:8
+    restart: always
+    volumes:
+      - ./data/db:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: docker.io/valkey/valkey:9-alpine
+    restart: always
+
+  rabbit:
+    image: docker.io/rabbitmq:4
+    restart: always
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBIT_USER:-rabbituser}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD:-rabbitpass}
+    volumes:
+      - ./data/rabbit:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  minio:
+    image: docker.io/pgsty/silo
+    command: server /data
+    restart: always
+    volumes:
+      - ./data/minio:/data
+    environment:
+      MINIO_ROOT_USER: ${S3_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${S3_ROOT_PASSWORD}
+      MINIO_DOMAIN: minio
+    networks:
+      default:
+        aliases:
+          # Bucket host names used by the backend for virtual-hosted URLs.
+          - revolt-uploads.minio
+          - attachments.minio
+          - avatars.minio
+          - backgrounds.minio
+          - icons.minio
+          - banners.minio
+          - emojis.minio
+
+  createbuckets:
+    image: docker.io/pgsty/mc
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      while ! /usr/bin/mc ready minio; do
+        /usr/bin/mc alias set minio http://minio:9000 '${S3_ROOT_USER}' '${S3_ROOT_PASSWORD}';
+        echo 'Waiting minio...' && sleep 1;
+      done;
+      /usr/bin/mc mb --ignore-existing minio/revolt-uploads;
+      exit 0;
+      "
+
+  # Only public route to /auth/account/create: enforces one-time invites.
+  gateway:
+    build: ./gateway
+    restart: always
+    environment:
+      BACKEND_URL: http://api:14702
+      MONGO_URL: mongodb://database:27017
+      MONGO_DB: revolt
+    depends_on:
+      database:
+        condition: service_healthy
+      api:
+        condition: service_started
+
+  api:
+    <<: *chat-service
+    image: ghcr.io/stoatchat/api:${CHAT_TAG}
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbit:
+        condition: service_healthy
+
+  events:
+    <<: *chat-service
+    image: ghcr.io/stoatchat/events:${CHAT_TAG}
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  autumn:
+    <<: *chat-service
+    image: ghcr.io/stoatchat/file-server:${CHAT_TAG}
+    depends_on:
+      database:
+        condition: service_healthy
+      createbuckets:
+        condition: service_started
+
+  january:
+    <<: *chat-service
+    image: ghcr.io/stoatchat/proxy:${CHAT_TAG}
+
+  gifbox:
+    <<: *chat-service
+    image: ghcr.io/stoatchat/gifbox:${CHAT_TAG}
+
+  crond:
+    <<: *chat-service
+    image: ghcr.io/stoatchat/crond:${CHAT_TAG}
+    depends_on:
+      database:
+        condition: service_healthy
+      minio:
+        condition: service_started
+
+  pushd:
+    <<: *chat-service
+    image: ghcr.io/stoatchat/pushd:${CHAT_TAG}
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbit:
+        condition: service_healthy
+
+  voice-ingress:
+    <<: *chat-service
+    image: ghcr.io/stoatchat/voice-ingress:${CHAT_TAG}
+    depends_on:
+      database:
+        condition: service_healthy
+      rabbit:
+        condition: service_healthy
+
+  # --- voice media ----------------------------------------------------------
+  livekit:
+    image: ${LIVEKIT_IMAGE}
+    restart: always
+    command: --config /etc/livekit.yml
+    volumes:
+      - ./generated/livekit.yml:/etc/livekit.yml:ro
+    ports:
+      # Media never passes through the reverse proxy. Host and container ports
+      # must match: the server advertises this range to clients.
+      - "${LIVEKIT_TCP_PORT:-7881}:${LIVEKIT_TCP_PORT:-7881}"
+      - "${LIVEKIT_UDP_PORT_START:-50000}-${LIVEKIT_UDP_PORT_END:-50100}:${LIVEKIT_UDP_PORT_START:-50000}-${LIVEKIT_UDP_PORT_END:-50100}/udp"
+    depends_on:
+      redis:
+        condition: service_started
+
+  # --- public entry point ---------------------------------------------------
+  caddy:
+    image: docker.io/caddy:2
+    restart: always
+    environment:
+      CHAT_DOMAIN: ${CHAT_DOMAIN}
+      HTTPS_PORT: ${HTTPS_PORT:-8443}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./generated/stoat.json:/stoat.json:ro
+      - ./data/caddy-data:/data
+      - ./data/caddy-config:/config
+
+  xray:
+    image: ${XRAY_IMAGE}
+    restart: always
+    command: run -config /etc/xray/config.json
+    ports:
+      - "${VPN_PORT:-443}:443/tcp"
+    volumes:
+      - ./generated/xray.json:/etc/xray/config.json:ro
+    depends_on:
+      - caddy

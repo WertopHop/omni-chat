@@ -1,0 +1,10 @@
+# Shell scripts and containers run on Linux: keep LF in the repository so the
+# scripts stay executable after checkout on Windows.
+*.sh            text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+Caddyfile       text eol=lf
+Dockerfile      text eol=lf
+*.go            text eol=lf
+*.tpl           text eol=lf
+.env.example    text eol=lf

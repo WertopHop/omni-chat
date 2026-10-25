@@ -1,0 +1,87 @@
+# HTTPS terminates here, but only on an internal port. The public 443 belongs to
+# Xray (Reality), which forwards every non-VPN TLS handshake to this server, so
+# certificate issuance can only use the HTTP-01 challenge on port 80.
+{
+	http_port 80
+	https_port {$HTTPS_PORT:8443}
+	admin off
+}
+
+http://{$CHAT_DOMAIN} {
+	redir https://{host}{uri} permanent
+}
+
+https://{$CHAT_DOMAIN}:{$HTTPS_PORT:8443} {
+	encode zstd gzip
+
+	route {
+		handle /.well-known/stoat* {
+			uri strip_prefix /.well-known/stoat
+			header Access-Control-Allow-Origin *
+			file_server {
+				root /stoat.json
+			}
+		}
+
+		# Sign-up must pass the invite gate, which makes the invite single-use.
+		# It is listed first on purpose: inside `route` the order is kept.
+		handle /api/auth/account/create* {
+			uri strip_prefix /api
+			reverse_proxy http://gateway:8080
+		}
+
+		handle /api* {
+			uri strip_prefix /api
+			reverse_proxy http://api:14702 {
+				header_down Location "^/" "/api/"
+			}
+		}
+
+		handle /ws {
+			uri strip_prefix /ws
+			reverse_proxy http://events:14703 {
+				header_down Location "^/" "/ws/"
+			}
+		}
+
+		handle /autumn* {
+			uri strip_prefix /autumn
+			reverse_proxy http://autumn:14704 {
+				header_down Location "^/" "/autumn/"
+			}
+		}
+
+		handle /january* {
+			uri strip_prefix /january
+			reverse_proxy http://january:14705 {
+				header_down Location "^/" "/january/"
+			}
+		}
+
+		handle /gifbox* {
+			uri strip_prefix /gifbox
+			reverse_proxy http://gifbox:14706 {
+				header_down Location "^/" "/gifbox/"
+			}
+		}
+
+		handle /livekit* {
+			uri strip_prefix /livekit
+			reverse_proxy http://livekit:7880 {
+				header_down Location "^/" "/livekit/"
+			}
+		}
+
+		handle /ingress* {
+			uri strip_prefix /ingress
+			reverse_proxy http://voice-ingress:8500 {
+				header_down Location "^/" "/ingress/"
+			}
+		}
+
+		# The desktop app serves its own UI; the web root only proves liveness.
+		handle {
+			respond "omni-chat" 200
+		}
+	}
+}

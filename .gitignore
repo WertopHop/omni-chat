@@ -1,0 +1,36 @@
+# Upstream projects cloned locally for reference only - never commit them
+/vendor/
+
+# Node / JS toolchain
+node_modules/
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+project_context.md
+plan.md
+
+# Rust / Tauri
+target/
+**/src-tauri/gen/
+
+# Python
+__pycache__/
+.venv/
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
