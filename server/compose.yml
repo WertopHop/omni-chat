@@ -78,7 +78,7 @@ services:
       exit 0;
       "
 
-  # Only public route to /auth/account/create: enforces one-time invites.
+  # Sign-up, nickname login and the admin API. Enforces one-time invites.
   gateway:
     build: ./gateway
     restart: always
@@ -86,6 +86,8 @@ services:
       BACKEND_URL: http://api:14702
       MONGO_URL: mongodb://database:27017
       MONGO_DB: revolt
+      ACCOUNT_EMAIL_DOMAIN: ${ACCOUNT_EMAIL_DOMAIN:-users.localhost}
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
     depends_on:
       database:
         condition: service_healthy

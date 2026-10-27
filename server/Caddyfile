@@ -15,6 +15,19 @@ https://{$CHAT_DOMAIN}:{$HTTPS_PORT:8443} {
 	encode zstd gzip
 
 	route {
+		# The desktop client runs from a different origin (tauri://localhost),
+		# so the API must answer CORS preflights itself. The `?` prefix keeps
+		# the backend's own Allow-Origin header and only fills the gap for
+		# other responses: browsers reject duplicated values.
+		@preflight method OPTIONS
+		header @preflight Access-Control-Allow-Origin "*"
+		header @preflight Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+		header @preflight Access-Control-Allow-Headers "Content-Type, X-Session-Token, X-Bot-Token, X-Admin-Token"
+		header @preflight Access-Control-Max-Age "86400"
+		respond @preflight 204
+
+		header ?Access-Control-Allow-Origin "*"
+
 		handle /.well-known/stoat* {
 			uri strip_prefix /.well-known/stoat
 			header Access-Control-Allow-Origin *
@@ -23,9 +36,29 @@ https://{$CHAT_DOMAIN}:{$HTTPS_PORT:8443} {
 			}
 		}
 
-		# Sign-up must pass the invite gate, which makes the invite single-use.
-		# It is listed first on purpose: inside `route` the order is kept.
+		# Sign-up and nickname-based login live in the gateway; they are listed
+		# before /api* on purpose: inside `route` the order is kept.
+		handle /api/auth/register {
+			uri strip_prefix /api
+			reverse_proxy http://gateway:8080
+		}
+
+		handle /api/auth/login {
+			uri strip_prefix /api
+			reverse_proxy http://gateway:8080
+		}
+
+		handle /api/auth/username-available {
+			uri strip_prefix /api
+			reverse_proxy http://gateway:8080
+		}
+
 		handle /api/auth/account/create* {
+			uri strip_prefix /api
+			reverse_proxy http://gateway:8080
+		}
+
+		handle /api/admin* {
 			uri strip_prefix /api
 			reverse_proxy http://gateway:8080
 		}

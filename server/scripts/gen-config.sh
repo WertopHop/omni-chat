@@ -98,6 +98,7 @@ fi
 
 ensure LIVEKIT_API_KEY openssl rand -hex 6
 ensure LIVEKIT_API_SECRET openssl rand -hex 24
+ensure ADMIN_TOKEN openssl rand -hex 24
 ensure S3_ROOT_USER echo omni
 ensure S3_ROOT_PASSWORD openssl rand -base64 24
 ensure REVOLT__FILES__ENCRYPTION_KEY openssl rand -base64 32

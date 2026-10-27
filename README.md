@@ -13,7 +13,19 @@ The project is not built from scratch; rather, it is assembled using proven open
 | Proxy/Certificates | Caddy | HTTPS for API, WebSockets, and file serving |
 | Client | Tauri v2 + React + TypeScript | Desktop application |
 
+## Repository Structure
+
+```
+server/   Server-side: Docker Compose, configurations, secret generator, utilities
+app/      Client application (Tauri + React)
+```
+
 ## Documentation
+
+- [`server/README.md`](server/README.md) — deployment, secrets, invites, VPN keys.
+- [`app/README.md`](app/README.md) — client stack, auth flow, local development.
+
+## Server-side Quick Start
 
 ```bash
 cd server
@@ -26,5 +38,8 @@ See [`server/README.md`](server/README.md) for details.
 
 ## Status
 
-Phase 2: server-side skeleton (compose, Caddy, LiveKit, Xray Reality + fallback, whitelist).
-The client application is the next phase.
+Phase 2 (done): server-side skeleton — compose, Caddy, LiveKit, Xray Reality with fallback,
+one-time invite whitelist, admin API in the gateway.
+
+Phase 3 (in progress): desktop client — nickname sign-in, server/channel list, message history
+and live updates. VPN switch, voice and admin panel are next.

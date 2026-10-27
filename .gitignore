@@ -11,13 +11,18 @@ build/
 project_context.md
 plan.md
 
-# Rust / Tauri
+# Rust / Tauri build output
 target/
 **/src-tauri/gen/
+
+# Build artifacts
+coverage/
+*.tsbuildinfo
 
 # Python
 __pycache__/
 .venv/
+venv/
 
 # Secrets and local environment
 .env
@@ -30,7 +35,6 @@ secrets/
 # OS / editor noise
 .DS_Store
 Thumbs.db
+*.log
 .idea/
-.vscode/*
-!.vscode/extensions.json
-!.vscode/settings.json
+.vscode/
