@@ -78,7 +78,8 @@ services:
       exit 0;
       "
 
-  # Sign-up, nickname login and the admin API. Enforces one-time invites.
+  # Sign-up, nickname login, the admin API and the VPN profile endpoint.
+  # Enforces one-time invites.
   gateway:
     build: ./gateway
     restart: always
@@ -88,6 +89,10 @@ services:
       MONGO_DB: revolt
       ACCOUNT_EMAIL_DOMAIN: ${ACCOUNT_EMAIL_DOMAIN:-users.localhost}
       ADMIN_TOKEN: ${ADMIN_TOKEN}
+      VPN_PROFILE_PATH: /app/client-profile.json
+    volumes:
+      # Rendered by scripts/gen-config.sh; read-only so keys never leave the host.
+      - ./generated/client-profile.json:/app/client-profile.json:ro
     depends_on:
       database:
         condition: service_healthy

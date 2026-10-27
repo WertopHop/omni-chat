@@ -16,11 +16,16 @@ embedded VPN switch (VPN arrives in the next stage).
 
 ```bash
 npm install
+npm run fetch:xray # downloads the Xray sidecar into src-tauri/binaries (~25 MB)
 npm run dev        # Vite only, in a browser
 npm run build      # type-check + production bundle
 npm run tauri dev  # desktop window with hot reload
 npm run tauri build
 ```
+
+`npm run fetch:xray` is required once before the desktop build: the binary is not
+committed, and `bundle.externalBin` expects `src-tauri/binaries/xray-<triple>`.
+Pass `-- --force` to re-download after bumping `XRAY_VERSION` in the script.
 
 ## How the client talks to the server
 
@@ -32,8 +37,34 @@ npm run tauri build
 3. `baseURL` is `${serverUrl}/api`, so the same build works against any server;
    the address is entered on the login screen and remembered.
 
-Session state is kept in `localStorage` for now. Moving the token (and later the
-VPN keys) into the OS keyring through Tauri is planned together with the VPN stage.
+Session state is kept in `localStorage` for now; moving it into the OS keyring
+through Tauri is still on the list.
+
+## VPN (proxy mode)
+
+The tunnel lives in Rust: [`src-tauri/src/vpn.rs`](src-tauri/src/vpn.rs:1) renders an
+Xray config from the profile and runs the sidecar.
+
+1. `useVpn` asks the server for the profile: `GET /api/vpn/profile` with the
+   session token (the gateway answers, so keys are only handed to known accounts).
+2. The profile is stored in the app config directory (`vpn/vpn-profile.json`) and
+   pushed to Rust via `vpn_set_profile`.
+3. `vpn_start` writes `vpn/xray.json` with two loopback inbounds (SOCKS `10808`,
+   HTTP `10809`) and a VLESS+Reality outbound, spawns the sidecar, waits for the
+   port, then flips the Windows system proxy to `127.0.0.1:10809` (reverse
+   restore on stop). Private ranges bypass the tunnel.
+4. `vpn_stop` kills the sidecar and restores the previous proxy settings; the app
+   exit hook does the same, so no orphaned `xray.exe` stays behind.
+
+Status, logs and the toggle are shown in the panel behind the `VPN` chip in the
+chat header. TUN mode (full traffic, per-app rules, `wintun.dll`) comes next.
+
+Verify the whole path without the UI:
+
+```bash
+set NODE_EXTRA_CA_CERTS=..\server\generated\caddy-root.crt
+npm run smoke:vpn
+```
 
 ## Local development against `server/`
 

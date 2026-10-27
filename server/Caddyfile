@@ -58,6 +58,11 @@ https://{$CHAT_DOMAIN}:{$HTTPS_PORT:8443} {
 			reverse_proxy http://gateway:8080
 		}
 
+		handle /api/vpn/profile {
+			uri strip_prefix /api
+			reverse_proxy http://gateway:8080
+		}
+
 		handle /api/admin* {
 			uri strip_prefix /api
 			reverse_proxy http://gateway:8080

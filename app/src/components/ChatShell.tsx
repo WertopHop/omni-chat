@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import type { Channel, Client } from "stoat.js";
 
 import { useChatClient } from "../hooks/useChatClient";
+import { useVpn } from "../hooks/useVpn";
 import type { StoredAuth } from "../lib/session";
+import { VpnPanel } from "./VpnPanel";
 
 type Props = {
   auth: StoredAuth;
@@ -17,6 +19,8 @@ export function ChatShell({ auth, onLogout }: Props) {
 
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
   const [selectedChannelId, setSelectedChannelId] = useState<string | null>(null);
+  const [vpnPanelOpen, setVpnPanelOpen] = useState(false);
+  const vpn = useVpn(auth);
 
   const servers = client.servers.toList();
   const activeServer =
@@ -109,10 +113,16 @@ export function ChatShell({ auth, onLogout }: Props) {
           <span className={connected ? "chip ok" : "chip"}>
             {connected ? "на связи" : "переподключение"}
           </span>
-          <span className="chip muted" title="Появится на следующем этапе">
-            VPN: скоро
-          </span>
+          <button
+            className={vpn.connected ? "chip vpn on" : "chip vpn"}
+            title="Управление туннелем"
+            onClick={() => setVpnPanelOpen((open) => !open)}
+          >
+            VPN: {vpn.connected ? "вкл" : vpn.busy ? "…" : "выкл"}
+          </button>
         </header>
+
+        {vpnPanelOpen && <VpnPanel vpn={vpn} onClose={() => setVpnPanelOpen(false)} />}
 
         {failure && <div className="banner">{failure}</div>}
 

@@ -8,7 +8,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "smoke": "node scripts/chat-smoke-test.mjs"
+    "fetch:xray": "node scripts/fetch-xray.mjs",
+    "smoke": "node scripts/chat-smoke-test.mjs",
+    "smoke:vpn": "node scripts/vpn-smoke-test.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

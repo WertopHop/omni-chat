@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Xray sidecar binary - fetched by `npm run fetch:xray`
+src-tauri/binaries/
+
 # Editor directories and files
 .vscode/
 .idea/

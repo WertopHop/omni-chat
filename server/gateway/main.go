@@ -40,6 +40,7 @@ var (
 	listenAddr         = env("LISTEN_ADDR", ":8080")
 	accountEmailDomain = env("ACCOUNT_EMAIL_DOMAIN", "users.localhost")
 	adminToken         = env("ADMIN_TOKEN", "")
+	vpnProfilePath     = env("VPN_PROFILE_PATH", "/app/client-profile.json")
 
 	usernamePattern = regexp.MustCompile(`^[\p{L}\p{N}_.-]{2,32}$`)
 	codePattern     = regexp.MustCompile(`^[A-Za-z0-9_-]{4,32}$`)
@@ -82,6 +83,7 @@ func main() {
 	mux.HandleFunc("POST /auth/login", s.handleLogin)
 	mux.HandleFunc("GET /auth/username-available", s.handleUsernameAvailable)
 	mux.HandleFunc("POST /auth/account/create", s.handleLegacyCreate)
+	mux.HandleFunc("GET /vpn/profile", s.handleVpnProfile)
 
 	// Admin routes.
 	mux.HandleFunc("GET /admin/invites", s.admin(s.handleListInvites))
@@ -478,6 +480,39 @@ func (s *server) emailForUsername(ctx context.Context, username string) (string,
 		return "", mongo.ErrNoDocuments
 	}
 	return account.Email, nil
+}
+
+// handleVpnProfile hands the client its tunnel profile (VLESS + Reality).
+//
+// The profile is rendered by scripts/gen-config.sh on the host and mounted
+// read-only, so the keys stay in the deployment directory. Only sessions the
+// backend recognises as valid get it.
+func (s *server) handleVpnProfile(w http.ResponseWriter, r *http.Request) {
+	token := r.Header.Get("X-Session-Token")
+	if token == "" {
+		writeError(w, http.StatusUnauthorized, "InvalidCredentials")
+		return
+	}
+
+	status, _, err := s.forwardRaw(r.Context(), http.MethodGet, "/users/@me", token, nil)
+	if err != nil {
+		log.Printf("vpn profile: session check: %v", err)
+		writeError(w, http.StatusBadGateway, "InternalError")
+		return
+	}
+	if status != http.StatusOK {
+		writeError(w, http.StatusUnauthorized, "InvalidCredentials")
+		return
+	}
+
+	body, err := os.ReadFile(vpnProfilePath)
+	if err != nil {
+		log.Printf("vpn profile: read %s: %v", vpnProfilePath, err)
+		writeError(w, http.StatusServiceUnavailable, "VpnProfileUnavailable")
+		return
+	}
+
+	writeRaw(w, http.StatusOK, body)
 }
 
 func (s *server) forward(ctx context.Context, method, path, token string, payload any) (int, []byte, error) {

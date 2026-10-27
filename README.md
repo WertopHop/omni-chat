@@ -35,11 +35,3 @@ docker compose up -d
 ```
 
 See [`server/README.md`](server/README.md) for details.
-
-## Status
-
-Phase 2 (done): server-side skeleton — compose, Caddy, LiveKit, Xray Reality with fallback,
-one-time invite whitelist, admin API in the gateway.
-
-Phase 3 (in progress): desktop client — nickname sign-in, server/channel list, message history
-and live updates. VPN switch, voice and admin panel are next.

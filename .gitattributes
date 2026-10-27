@@ -8,3 +8,7 @@ Dockerfile      text eol=lf
 *.go            text eol=lf
 *.tpl           text eol=lf
 .env.example    text eol=lf
+*.rs            text eol=lf
+*.ts            text eol=lf
+*.tsx           text eol=lf
+*.mjs           text eol=lf
