@@ -4,38 +4,48 @@
  * The gateway hides the backend's e-mail based accounts: users sign in with a
  * nickname, and an account can only be created with an invite code.
  */
+import type { MessageKey } from "../i18n";
 import { apiBaseUrl, type Session } from "./session";
 
 export class AuthError extends Error {
+  /** Server error type, e.g. `InvalidInvite`. */
   readonly kind: string;
 
-  constructor(kind: string, message?: string) {
-    super(message ?? kind);
+  constructor(kind: string) {
+    super(kind);
     this.kind = kind;
   }
 }
 
-const HINTS: Record<string, string> = {
-  InvalidCredentials: "Неверный ник или пароль.",
-  MissingInvite: "Нужен инвайт-код от администратора.",
-  InvalidInvite: "Инвайт-код неверный или уже использован.",
-  UsernameTaken: "Этот ник уже занят.",
-  InvalidUsername: "Ник: 2-32 символа, буквы, цифры, точка, дефис, подчёркивание.",
-  ShortPassword: "Пароль должен быть не короче 8 символов.",
-  CompromisedPassword: "Такой пароль слишком часто утекал, выберите другой.",
-  FailedValidation: "Сервер отклонил данные.",
+const HINTS: Partial<Record<string, MessageKey>> = {
+  InvalidCredentials: "errors.invalidCredentials",
+  MissingInvite: "errors.missingInvite",
+  InvalidInvite: "errors.invalidInvite",
+  UsernameTaken: "errors.usernameTaken",
+  InvalidUsername: "errors.invalidUsername",
+  ShortPassword: "errors.shortPassword",
+  CompromisedPassword: "errors.compromisedPassword",
+  FailedValidation: "errors.failedValidation",
+  InvalidSession: "errors.invalidSession",
 };
 
-export function describeError(error: unknown): string {
+export type DescribedError = {
+  key: MessageKey;
+  params?: Record<string, string | number>;
+};
+
+/** Maps any thrown value to a dictionary key for the current language. */
+export function describeError(error: unknown): DescribedError {
   if (error instanceof AuthError) {
-    return HINTS[error.kind] ?? `Ошибка сервера: ${error.kind}`;
+    const key = HINTS[error.kind];
+    return key ? { key } : { key: "errors.server", params: { kind: error.kind } };
   }
   if (error instanceof Error) {
     return error.message.includes("fetch")
-      ? "Сервер недоступен: проверьте адрес и интернет."
-      : error.message;
+      ? { key: "errors.unreachable" }
+      : { key: "errors.raw", params: { message: error.message } };
   }
-  return "Неизвестная ошибка.";
+  return { key: "errors.unknown" };
 }
 
 async function post<T>(serverUrl: string, path: string, body: unknown): Promise<T> {
@@ -109,7 +119,7 @@ export async function checkServer(
 
 function requireSession(session: SessionResponse | undefined): Session {
   if (!session?.token || !session.user_id) {
-    throw new AuthError("InvalidSession", "Сервер не вернул сессию.");
+    throw new AuthError("InvalidSession");
   }
   return { _id: session._id, token: session.token, user_id: session.user_id };
 }

@@ -41,9 +41,55 @@ textarea {
   color: inherit;
 }
 
+/* ---------- shared ---------- */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- language ---------- */
+
+.lang-switcher select {
+  appearance: none;
+  padding: 5px 9px;
+  border: 1px solid #3d4049;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.lang-switcher select:hover {
+  color: var(--text);
+  border-color: var(--text-dim);
+}
+
+.lang-switcher.compact select {
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+}
+
+.login-lang {
+  position: absolute;
+  top: 18px;
+  right: 20px;
+}
+
 /* ---------- login ---------- */
 
 .login {
+  position: relative;
   display: grid;
   place-items: center;
   height: 100%;
@@ -216,6 +262,12 @@ textarea {
   margin: 0;
   color: var(--text-dim);
   font-size: 13px;
+}
+
+.boot-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 /* ---------- layout ---------- */

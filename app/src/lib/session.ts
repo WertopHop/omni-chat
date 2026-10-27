@@ -1,8 +1,8 @@
 /**
  * Persisted authentication state.
  *
- * The session token is stored in the webview storage for now; moving it to the
- * OS keyring (Tauri stronghold) is planned together with the VPN credentials.
+ * The token lives in the webview storage; a keyring-backed store would be the
+ * next step for hardening.
  */
 export type Session = {
   _id: string;

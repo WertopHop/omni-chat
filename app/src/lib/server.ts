@@ -19,7 +19,8 @@ export type ServerInfo = {
 export async function fetchServerInfo(serverUrl: string): Promise<ServerInfo> {
   const response = await fetch(`${apiBaseUrl(serverUrl)}/`);
   if (!response.ok) {
-    throw new Error(`Сервер вернул HTTP ${response.status}`);
+    // Technical detail: shown verbatim in the connection banner.
+    throw new Error(`API root request failed: HTTP ${response.status}`);
   }
   return (await response.json()) as ServerInfo;
 }

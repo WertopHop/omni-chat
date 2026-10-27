@@ -1,7 +1,7 @@
 # Desktop application
 
 Tauri v2 + React + TypeScript client for omni-chat: chat with voice channels and an
-embedded VPN switch (VPN arrives in the next stage).
+embedded VPN switch.
 
 ## Stack
 
@@ -103,13 +103,30 @@ copying `src-tauri/icons/128x128.png` after regenerating.
 
 ```
 src/
-  lib/        gateway calls, session persistence, URL helpers
-  hooks/      useChatClient - owns the stoat.js client and its events
-  components/ LoginScreen, ChatShell (rail, channels, messages, composer)
+  i18n/       typed dictionaries (en, ru) and the language provider
+  lib/        gateway calls, session persistence, URL helpers, VPN bridge
+  hooks/      useChatClient (SDK client and events), useVpn (tunnel state)
+  components/ LoginScreen, ChatShell, VpnPanel, LanguageSwitcher
 ```
+
+## Localization
+
+English is the source language and the fallback; Russian ships alongside it. The
+language is picked from the switcher on the login screen or in the chat header and
+is remembered in `localStorage`.
+
+- [`src/i18n/en.ts`](src/i18n/en.ts:1) holds every key with its English text.
+- [`src/i18n/ru.ts`](src/i18n/ru.ts:1) is typed as `Record<MessageKey, string>`, so a
+  missing or extra key breaks the build.
+- [`src/i18n/index.tsx`](src/i18n/index.tsx:1) provides `useI18n()` with `t(key, params)`,
+  `locale`, `setLocale` and `intlLocale` (for date formatting).
+
+To add a language: copy `en.ts` to `<code>.ts`, translate the values, add the
+file to `dictionaries` and to the `Locale` type / `LOCALES` list in `index.tsx`.
+Placeholders use `{name}` syntax.
 
 ## Roadmap
 
 - attachments, replies, reactions, DMs, member list;
-- VPN switch: bundled Xray sidecar, proxy mode first, then TUN with a helper;
-- per-app routing, voice channels via LiveKit, admin panel for invites/accounts.
+- full-tunnel mode with a helper, per-app routing;
+- voice channels via LiveKit, admin panel for invites and accounts.

@@ -1,0 +1,97 @@
+/**
+ * Russian dictionary. Every key of `./en.ts` must be present here; the type
+ * checker fails the build otherwise.
+ */
+import type { MessageKey } from "./en";
+
+export const ru: Record<MessageKey, string> = {
+  "app.name": "omni-chat",
+  "app.tagline": "Приватный сервер для своих",
+
+  "language.label": "Язык",
+  "language.en": "English",
+  "language.ru": "Русский",
+
+  "login.tab.signIn": "Вход",
+  "login.tab.register": "Регистрация",
+  "login.server.label": "Адрес сервера",
+  "login.server.checking": "Проверяем сервер…",
+  "login.server.online": "Сервер доступен",
+  "login.server.onlineWithVersion": "Сервер доступен ({version})",
+  "login.server.offline": "Сервер не отвечает",
+  "login.username": "Ник",
+  "login.password": "Пароль",
+  "login.invite": "Инвайт-код",
+  "login.invitePlaceholder": "выдаёт администратор",
+  "login.submit.signIn": "Войти",
+  "login.submit.register": "Создать аккаунт",
+  "login.submit.busy": "Подождите…",
+  "login.inviteHint":
+    "Аккаунт создаётся по инвайт-коду: сервер закрытый, доступ выдаёт администратор.",
+  "login.error.missingServer": "Укажите адрес сервера.",
+  "login.error.missingCredentials": "Заполните ник и пароль.",
+
+  "chat.connecting": "Подключаемся к серверу…",
+  "chat.logout": "Выйти",
+  "chat.servers.none": "Нет серверов",
+  "chat.channels.empty": "Нет текстовых каналов",
+  "chat.servers.empty": "Вы пока не в одном сервере",
+  "chat.header.chooseChannel": "Выберите канал",
+  "chat.status.online": "на связи",
+  "chat.status.reconnecting": "переподключение",
+  "chat.placeholder": "Выберите канал",
+  "chat.messages.empty": "Пока пусто. Напишите первым.",
+  "chat.messages.unknownAuthor": "неизвестный",
+  "chat.composer.placeholder": "Сообщение в # {channel}",
+  "chat.composer.send": "Отправить",
+
+  "vpn.chip": "VPN: {state}",
+  "vpn.chip.busy": "…",
+  "vpn.chip.title": "Управление туннелем",
+  "vpn.title": "Туннель",
+  "vpn.close": "Закрыть",
+  "vpn.unavailable":
+    "VPN работает только в настольном приложении: профиль и туннель живут в нативной части клиента.",
+  "vpn.modeNote":
+    "Режим «прокси»: локальный SOCKS/HTTP и системный прокси. Управление всем трафиком и приложениями появится позже.",
+  "vpn.fact.state": "Состояние",
+  "vpn.fact.server": "Сервер",
+  "vpn.fact.socks": "Локальный SOCKS",
+  "vpn.fact.systemProxy": "Системный прокси",
+  "vpn.fact.uptime": "Аптайм",
+  "vpn.state.connected": "подключено",
+  "vpn.state.connecting": "подключение…",
+  "vpn.state.disabled": "выключено",
+  "vpn.systemProxy.on": "включён",
+  "vpn.systemProxy.off": "выключен",
+  "vpn.action.connect": "Включить VPN",
+  "vpn.action.disconnect": "Отключить",
+  "vpn.action.busy": "Подключаем…",
+  "vpn.action.refresh": "Обновить профиль",
+  "vpn.uptime.seconds": "{count} с",
+  "vpn.uptime.minutes": "{count} мин",
+  "vpn.uptime.hours": "{hours} ч {minutes} мин",
+
+  "errors.common.dash": "—",
+  "errors.invalidCredentials": "Неверный ник или пароль.",
+  "errors.missingInvite": "Нужен инвайт-код от администратора.",
+  "errors.invalidInvite": "Инвайт-код неверный или уже использован.",
+  "errors.usernameTaken": "Этот ник уже занят.",
+  "errors.invalidUsername":
+    "Ник: 2-32 символа, буквы, цифры, точка, дефис, подчёркивание.",
+  "errors.shortPassword": "Пароль должен быть не короче 8 символов.",
+  "errors.compromisedPassword": "Такой пароль слишком часто утекал, выберите другой.",
+  "errors.failedValidation": "Сервер отклонил данные.",
+  "errors.invalidSession": "Сервер не вернул сессию.",
+  "errors.unreachable": "Сервер недоступен: проверьте адрес и интернет.",
+  "errors.server": "Ошибка сервера: {kind}",
+  "errors.raw": "{message}",
+  "errors.unknown": "Неизвестная ошибка.",
+
+  "vpn.error.profileUnreachable": "Сервер недоступен: не удалось получить профиль VPN.",
+  "vpn.error.sessionExpired": "Сессия истекла: войдите заново, чтобы получить профиль VPN.",
+  "vpn.error.profileMissing":
+    "Профиль VPN не найден на сервере (проверьте generated/client-profile.json).",
+  "vpn.error.profileStatus": "Сервер вернул ошибку {status} при выдаче профиля VPN.",
+  "vpn.error.generic": "Не удалось управлять VPN.",
+};

@@ -7,17 +7,13 @@ import {
   readVpnStatus,
   startVpn,
   stopVpn,
+  toVpnIssue,
   vpnAvailable,
+  type VpnIssue,
   type VpnStatus,
 } from "../lib/vpn";
 
 const STATUS_POLL_MS = 2500;
-
-function describe(error: unknown): string {
-  if (typeof error === "string") return error;
-  if (error instanceof Error) return error.message;
-  return "Не удалось управлять VPN.";
-}
 
 /**
  * Owns the local tunnel: pulls the profile for the current session once and
@@ -28,7 +24,7 @@ export function useVpn(auth: StoredAuth) {
   const [status, setStatus] = useState<VpnStatus | null>(null);
   const [profileReady, setProfileReady] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [issue, setIssue] = useState<VpnIssue | null>(null);
   const busyRef = useRef(false);
 
   const syncProfile = useCallback(async () => {
@@ -48,7 +44,7 @@ export function useVpn(auth: StoredAuth) {
         setStatus(current);
         await syncProfile();
       } catch (syncError) {
-        if (active) setError(describe(syncError));
+        if (active) setIssue(toVpnIssue(syncError));
       }
     })();
 
@@ -65,7 +61,7 @@ export function useVpn(auth: StoredAuth) {
       try {
         const current = await readVpnStatus();
         setStatus(current);
-        if (current.error) setError(current.error);
+        if (current.error) setIssue({ text: current.error });
       } catch {
         // The window may be closing; the next tick will retry.
       }
@@ -79,7 +75,7 @@ export function useVpn(auth: StoredAuth) {
 
     busyRef.current = true;
     setBusy(true);
-    setError(null);
+    setIssue(null);
 
     try {
       if (status?.running) {
@@ -89,11 +85,11 @@ export function useVpn(auth: StoredAuth) {
         setStatus(await startVpn());
       }
     } catch (toggleError) {
-      setError(describe(toggleError));
+      setIssue(toVpnIssue(toggleError));
       try {
         setStatus(await readVpnStatus());
       } catch {
-        // ignore: keep the last known status
+        // keep the last known status
       }
     } finally {
       busyRef.current = false;
@@ -105,9 +101,9 @@ export function useVpn(auth: StoredAuth) {
     if (!available) return;
     try {
       await syncProfile();
-      setError(null);
+      setIssue(null);
     } catch (refreshError) {
-      setError(describe(refreshError));
+      setIssue(toVpnIssue(refreshError));
     }
   }, [available, syncProfile]);
 
@@ -115,7 +111,7 @@ export function useVpn(auth: StoredAuth) {
     available,
     connected: status?.running ?? false,
     busy,
-    error,
+    issue,
     status,
     toggle,
     refresh,

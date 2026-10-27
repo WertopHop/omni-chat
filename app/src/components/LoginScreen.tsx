@@ -1,12 +1,20 @@
 import { useEffect, useState, type FormEvent } from "react";
 
-import { checkServer, describeError, login, register } from "../lib/auth";
+import { useI18n } from "../i18n";
+import {
+  checkServer,
+  describeError,
+  login,
+  register,
+  type DescribedError,
+} from "../lib/auth";
 import {
   loadAuth,
   normalizeServerUrl,
   type Session,
   type StoredAuth,
 } from "../lib/session";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 
 type Mode = "login" | "register";
 type ServerState = "idle" | "checking" | "ok" | "unreachable";
@@ -16,6 +24,7 @@ type Props = {
 };
 
 export function LoginScreen({ onAuthenticated }: Props) {
+  const { t } = useI18n();
   const saved = loadAuth();
 
   const [mode, setMode] = useState<Mode>("login");
@@ -24,7 +33,7 @@ export function LoginScreen({ onAuthenticated }: Props) {
   const [password, setPassword] = useState("");
   const [invite, setInvite] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<DescribedError | null>(null);
   const [serverState, setServerState] = useState<ServerState>("idle");
   const [serverVersion, setServerVersion] = useState<string | null>(null);
 
@@ -57,11 +66,11 @@ export function LoginScreen({ onAuthenticated }: Props) {
 
     const url = normalizeServerUrl(serverUrl);
     if (!url) {
-      setError("Укажите адрес сервера.");
+      setError({ key: "login.error.missingServer" });
       return;
     }
     if (!username.trim() || !password) {
-      setError("Заполните ник и пароль.");
+      setError({ key: "login.error.missingCredentials" });
       return;
     }
 
@@ -84,10 +93,12 @@ export function LoginScreen({ onAuthenticated }: Props) {
 
   return (
     <div className="login">
+      <LanguageSwitcher className="login-lang" />
+
       <form className="login-card" onSubmit={submit}>
         <img className="login-logo" src="/app-icon.png" alt="" />
-        <h1>omni-chat</h1>
-        <p className="login-subtitle">Приватный сервер для своих</p>
+        <h1>{t("app.name")}</h1>
+        <p className="login-subtitle">{t("app.tagline")}</p>
 
         <div className="tabs">
           <button
@@ -95,19 +106,19 @@ export function LoginScreen({ onAuthenticated }: Props) {
             className={mode === "login" ? "tab active" : "tab"}
             onClick={() => setMode("login")}
           >
-            Вход
+            {t("login.tab.signIn")}
           </button>
           <button
             type="button"
             className={mode === "register" ? "tab active" : "tab"}
             onClick={() => setMode("register")}
           >
-            Регистрация
+            {t("login.tab.register")}
           </button>
         </div>
 
         <label className="field">
-          <span>Адрес сервера</span>
+          <span>{t("login.server.label")}</span>
           <input
             value={serverUrl}
             onChange={(event) => setServerUrl(event.target.value)}
@@ -118,15 +129,17 @@ export function LoginScreen({ onAuthenticated }: Props) {
         </label>
 
         <div className={`server-state ${serverState}`}>
-          {serverState === "checking" && "Проверяем сервер…"}
+          {serverState === "checking" && t("login.server.checking")}
           {serverState === "ok" &&
-            `Сервер доступен${serverVersion ? ` (${serverVersion})` : ""}`}
-          {serverState === "unreachable" && "Сервер не отвечает"}
+            (serverVersion
+              ? t("login.server.onlineWithVersion", { version: serverVersion })
+              : t("login.server.online"))}
+          {serverState === "unreachable" && t("login.server.offline")}
           {serverState === "idle" && " "}
         </div>
 
         <label className="field">
-          <span>Ник</span>
+          <span>{t("login.username")}</span>
           <input
             value={username}
             onChange={(event) => setUsername(event.target.value)}
@@ -136,7 +149,7 @@ export function LoginScreen({ onAuthenticated }: Props) {
         </label>
 
         <label className="field">
-          <span>Пароль</span>
+          <span>{t("login.password")}</span>
           <input
             type="password"
             value={password}
@@ -147,33 +160,28 @@ export function LoginScreen({ onAuthenticated }: Props) {
 
         {mode === "register" && (
           <label className="field">
-            <span>Инвайт-код</span>
+            <span>{t("login.invite")}</span>
             <input
               value={invite}
               onChange={(event) => setInvite(event.target.value)}
-              placeholder="выдаёт администратор"
+              placeholder={t("login.invitePlaceholder")}
               autoComplete="off"
               spellCheck={false}
             />
           </label>
         )}
 
-        {error && <div className="error">{error}</div>}
+        {error && <div className="error">{t(error.key, error.params)}</div>}
 
         <button className="primary" type="submit" disabled={busy}>
           {busy
-            ? "Подождите…"
+            ? t("login.submit.busy")
             : mode === "register"
-              ? "Создать аккаунт"
-              : "Войти"}
+              ? t("login.submit.register")
+              : t("login.submit.signIn")}
         </button>
 
-        {mode === "register" && (
-          <p className="hint">
-            Аккаунт создаётся по инвайт-коду: сервер закрытый, доступ выдаёт
-            администратор.
-          </p>
-        )}
+        {mode === "register" && <p className="hint">{t("login.inviteHint")}</p>}
       </form>
     </div>
   );

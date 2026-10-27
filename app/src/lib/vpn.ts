@@ -6,6 +6,7 @@
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
+import type { MessageKey } from "../i18n";
 import { normalizeServerUrl, type Session } from "./session";
 
 export type VpnProfile = {
@@ -34,7 +35,38 @@ export type VpnStatus = {
   log: string[];
 };
 
-export class VpnError extends Error {}
+/** Carries a dictionary key so the message is translated at render time. */
+export class VpnError extends Error {
+  readonly key: MessageKey;
+  readonly params?: Record<string, string | number>;
+
+  constructor(key: MessageKey, params?: Record<string, string | number>) {
+    super(key);
+    this.key = key;
+    this.params = params;
+  }
+}
+
+/**
+ * A message ready for display: either a dictionary key or raw text coming from
+ * the native side (where errors are technical by design).
+ */
+export type VpnIssue =
+  | { key: MessageKey; params?: Record<string, string | number> }
+  | { text: string };
+
+export function toVpnIssue(error: unknown): VpnIssue {
+  if (error instanceof VpnError) {
+    return { key: error.key, params: error.params };
+  }
+  if (typeof error === "string") {
+    return { text: error };
+  }
+  if (error instanceof Error) {
+    return { text: error.message };
+  }
+  return { key: "vpn.error.generic" };
+}
 
 export function vpnAvailable(): boolean {
   return isTauri();
@@ -50,17 +82,17 @@ export async function fetchVpnProfile(
       headers: { "X-Session-Token": session.token },
     });
   } catch {
-    throw new VpnError("Сервер недоступен: не удалось получить профиль VPN.");
+    throw new VpnError("vpn.error.profileUnreachable");
   }
 
   if (response.status === 401) {
-    throw new VpnError("Сессия истекла: войдите заново, чтобы получить профиль VPN.");
+    throw new VpnError("vpn.error.sessionExpired");
   }
   if (response.status === 503) {
-    throw new VpnError("Профиль VPN не найден на сервере (проверьте generated/client-profile.json).");
+    throw new VpnError("vpn.error.profileMissing");
   }
   if (!response.ok) {
-    throw new VpnError(`Сервер вернул ошибку ${response.status} при выдаче профиля VPN.`);
+    throw new VpnError("vpn.error.profileStatus", { status: response.status });
   }
 
   return (await response.json()) as VpnProfile;

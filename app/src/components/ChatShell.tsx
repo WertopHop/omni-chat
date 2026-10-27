@@ -3,7 +3,9 @@ import type { Channel, Client } from "stoat.js";
 
 import { useChatClient } from "../hooks/useChatClient";
 import { useVpn } from "../hooks/useVpn";
+import { useI18n } from "../i18n";
 import type { StoredAuth } from "../lib/session";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 import { VpnPanel } from "./VpnPanel";
 
 type Props = {
@@ -12,6 +14,7 @@ type Props = {
 };
 
 export function ChatShell({ auth, onLogout }: Props) {
+  const { t } = useI18n();
   const { client, ready, connected, revision, failure } = useChatClient(
     auth.serverUrl,
     auth.session,
@@ -38,12 +41,15 @@ export function ChatShell({ auth, onLogout }: Props) {
     return (
       <div className="boot">
         <div className="boot-card">
-          <h2>Подключаемся к серверу…</h2>
+          <h2>{t("chat.connecting")}</h2>
           <p>{auth.serverUrl}</p>
           {failure && <div className="error">{failure}</div>}
-          <button className="ghost" onClick={onLogout}>
-            Выйти
-          </button>
+          <div className="boot-actions">
+            <LanguageSwitcher />
+            <button className="ghost" onClick={onLogout}>
+              {t("chat.logout")}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -71,7 +77,7 @@ export function ChatShell({ auth, onLogout }: Props) {
 
       <aside className="channels">
         <header className="channels-header">
-          {activeServer?.name ?? "Нет серверов"}
+          {activeServer?.name ?? t("chat.servers.none")}
         </header>
 
         <div className="channel-list">
@@ -89,9 +95,9 @@ export function ChatShell({ auth, onLogout }: Props) {
           ))}
 
           {activeServer && textChannels.length === 0 && (
-            <p className="empty">Нет текстовых каналов</p>
+            <p className="empty">{t("chat.channels.empty")}</p>
           )}
-          {!activeServer && <p className="empty">Вы пока не в одном сервере</p>}
+          {!activeServer && <p className="empty">{t("chat.servers.empty")}</p>}
         </div>
 
         <footer className="user-panel">
@@ -99,7 +105,7 @@ export function ChatShell({ auth, onLogout }: Props) {
             {(client.user?.username ?? "?").slice(0, 2)}
           </div>
           <div className="user-name">{client.user?.username ?? "…"}</div>
-          <button className="ghost small" onClick={onLogout} title="Выйти">
+          <button className="ghost small" onClick={onLogout} title={t("chat.logout")}>
             ⎋
           </button>
         </footer>
@@ -108,17 +114,26 @@ export function ChatShell({ auth, onLogout }: Props) {
       <main className="chat">
         <header className="chat-header">
           <span className="chat-title">
-            {activeChannel ? `# ${activeChannel.name}` : "Выберите канал"}
+            {activeChannel
+              ? `# ${activeChannel.name}`
+              : t("chat.header.chooseChannel")}
           </span>
           <span className={connected ? "chip ok" : "chip"}>
-            {connected ? "на связи" : "переподключение"}
+            {connected ? t("chat.status.online") : t("chat.status.reconnecting")}
           </span>
+          <LanguageSwitcher className="compact" />
           <button
             className={vpn.connected ? "chip vpn on" : "chip vpn"}
-            title="Управление туннелем"
+            title={t("vpn.chip.title")}
             onClick={() => setVpnPanelOpen((open) => !open)}
           >
-            VPN: {vpn.connected ? "вкл" : vpn.busy ? "…" : "выкл"}
+            {t("vpn.chip", {
+              state: vpn.connected
+                ? t("vpn.state.connected")
+                : vpn.busy
+                  ? t("vpn.chip.busy")
+                  : t("vpn.state.disabled"),
+            })}
           </button>
         </header>
 
@@ -132,7 +147,7 @@ export function ChatShell({ auth, onLogout }: Props) {
             <Composer channel={activeChannel} />
           </>
         ) : (
-          <div className="placeholder">Выберите канал</div>
+          <div className="placeholder">{t("chat.placeholder")}</div>
         )}
       </main>
     </div>
@@ -148,6 +163,8 @@ function MessageList({
   channel: Channel;
   revision: number;
 }) {
+  const { t, intlLocale } = useI18n();
+
   useEffect(() => {
     channel.fetchMessages({ limit: 50 }).catch((error) => {
       console.error("failed to load history", error);
@@ -167,22 +184,23 @@ function MessageList({
         <article className="message" key={message.id}>
           <div className="message-meta">
             <span className="message-author">
-              {message.author?.username ?? "неизвестный"}
+              {message.author?.username ?? t("chat.messages.unknownAuthor")}
             </span>
-            <time>{message.createdAt.toLocaleString()}</time>
+            <time>{message.createdAt.toLocaleString(intlLocale)}</time>
           </div>
           <div className="message-body">{message.content}</div>
         </article>
       ))}
 
       {messages.length === 0 && (
-        <p className="empty">Пока пусто. Напишите первым.</p>
+        <p className="empty">{t("chat.messages.empty")}</p>
       )}
     </div>
   );
 }
 
 function Composer({ channel }: { channel: Channel }) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -220,11 +238,11 @@ function Composer({ channel }: { channel: Channel }) {
             void send();
           }
         }}
-        placeholder={`Сообщение в #${channel.name}`}
+        placeholder={t("chat.composer.placeholder", { channel: channel.name })}
         rows={1}
       />
       <button className="primary" type="submit" disabled={!draft.trim() || sending}>
-        Отправить
+        {t("chat.composer.send")}
       </button>
     </form>
   );
