@@ -54,16 +54,26 @@ export const en = {
   "vpn.close": "Close",
   "vpn.unavailable":
     "The VPN runs only in the desktop application: the profile and the tunnel live in the native part of the client.",
-  "vpn.modeNote":
-    "Proxy mode: a local SOCKS/HTTP proxy and the system proxy. Full-traffic control and per-app rules come later.",
+  "vpn.mode.label": "Traffic mode",
+  "vpn.mode.proxy": "Proxy",
+  "vpn.mode.tun": "Full tunnel",
+  "vpn.mode.proxyNote":
+    "Proxy: the tunnel listens on a local SOCKS/HTTP port and the system proxy points at it. Applications that ignore the system proxy stay outside.",
+  "vpn.mode.tunNote":
+    "Full tunnel: every IPv4 and IPv6 connection of this machine goes through the server, and DNS is forced into the tunnel too. Windows asks for administrator rights once per connection.",
   "vpn.fact.state": "State",
   "vpn.fact.server": "Server",
   "vpn.fact.socks": "Local SOCKS",
   "vpn.fact.systemProxy": "System proxy",
+  "vpn.fact.tunnel": "Tunnel adapter",
+  "vpn.fact.elevation": "Rights",
   "vpn.fact.uptime": "Uptime",
   "vpn.state.connected": "connected",
   "vpn.state.connecting": "connecting…",
+  "vpn.state.reconnecting": "reconnecting…",
   "vpn.state.disabled": "off",
+  "vpn.elevation.admin": "administrator",
+  "vpn.elevation.user": "current user",
   "vpn.systemProxy.on": "on",
   "vpn.systemProxy.off": "off",
   "vpn.action.connect": "Turn on VPN",

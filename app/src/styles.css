@@ -484,6 +484,40 @@ textarea {
   box-shadow: 0 0 0 3px rgba(76, 175, 125, 0.18);
 }
 
+.vpn-modes {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border-radius: 9px;
+  background: #1f2024;
+}
+
+.vpn-mode {
+  flex: 1;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.vpn-mode:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.vpn-mode.active {
+  background: #33353b;
+  color: var(--text);
+}
+
+.vpn-mode:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
 .vpn-note {
   margin: 0;
   color: var(--text-dim);

@@ -130,9 +130,11 @@ export function ChatShell({ auth, onLogout }: Props) {
             {t("vpn.chip", {
               state: vpn.connected
                 ? t("vpn.state.connected")
-                : vpn.busy
-                  ? t("vpn.chip.busy")
-                  : t("vpn.state.disabled"),
+                : vpn.reconnecting
+                  ? t("vpn.state.reconnecting")
+                  : vpn.busy
+                    ? t("vpn.chip.busy")
+                    : t("vpn.state.disabled"),
             })}
           </button>
         </header>

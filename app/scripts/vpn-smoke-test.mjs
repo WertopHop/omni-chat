@@ -1,7 +1,8 @@
 /**
  * End-to-end check of the VPN path, without the desktop shell:
- * gateway profile endpoint -> local Xray sidecar (proxy mode) -> a request
- * that leaves through the tunnel.
+ * gateway profile endpoint -> local tunnel sidecar (proxy mode) -> a request
+ * that leaves through the tunnel. The full tunnel config is validated as well,
+ * since starting it needs administrator rights and cannot run here.
  *
  * Run against a local stack:
  *   set NODE_EXTRA_CA_CERTS=..\server\generated\caddy-root.crt
@@ -36,18 +37,38 @@ function readAdminToken() {
 
 function sidecarPath() {
   const dir = resolve(here, "../src-tauri/binaries");
-  const binary = readdirSync(dir).find((name) => name.startsWith("xray-"));
-  if (!binary) throw new Error(`xray sidecar is missing in ${dir}: run "npm run fetch:xray"`);
+  const binary = readdirSync(dir).find((name) => name.startsWith("tunnel-core-"));
+  if (!binary) {
+    throw new Error(`the tunnel sidecar is missing in ${dir}: run "npm run fetch:tunnel"`);
+  }
   return join(dir, binary);
 }
 
-function renderConfig(profile) {
+function renderConfig(profile, mode = "proxy") {
+  const inbounds = [
+    { tag: "socks", listen: "127.0.0.1", port: SOCKS_PORT, protocol: "socks", settings: { auth: "noauth", udp: false } },
+    { tag: "http", listen: "127.0.0.1", port: HTTP_PORT, protocol: "http" },
+  ];
+
+  if (mode === "tun") {
+    inbounds.push({
+      tag: "tun",
+      port: 0,
+      protocol: "tun",
+      settings: {
+        name: "omni-chat",
+        desc: "Wintun",
+        mtu: 1500,
+        dns: ["1.1.1.1"],
+        autoSystemRoutingTable: ["0.0.0.0/0", "::/0"],
+        autoSystemWfpBlockLeak: ["dns"],
+      },
+    });
+  }
+
   return {
     log: { loglevel: "warning" },
-    inbounds: [
-      { tag: "socks", listen: "127.0.0.1", port: SOCKS_PORT, protocol: "socks", settings: { auth: "noauth", udp: false } },
-      { tag: "http", listen: "127.0.0.1", port: HTTP_PORT, protocol: "http" },
-    ],
+    inbounds,
     outbounds: [
       {
         tag: "proxy",
@@ -141,15 +162,19 @@ const profileResponse = await fetch(`${base}/vpn/profile`, {
 if (!profileResponse.ok) throw new Error(`profile -> ${profileResponse.status}`);
 const profile = await profileResponse.json();
 console.log(`profile: ${profile.name} ${profile.host}:${profile.port} (reality ${profile.reality.serverName})`);
-
 const workDir = mkdtempSync(join(tmpdir(), "omni-vpn-"));
-const configPath = join(workDir, "xray.json");
+const configPath = join(workDir, "tunnel.json");
 writeFileSync(configPath, JSON.stringify(renderConfig(profile), null, 2));
 
-const xray = spawn(sidecarPath(), ["-c", configPath], { stdio: ["ignore", "pipe", "pipe"] });
+const tunConfigPath = join(workDir, "tunnel-tun.json");
+writeFileSync(tunConfigPath, JSON.stringify(renderConfig(profile, "tun"), null, 2));
+execFileSync(sidecarPath(), ["-test", "-c", tunConfigPath], { stdio: "pipe" });
+console.log("full tunnel config: valid");
+
+const core = spawn(sidecarPath(), ["-c", configPath], { stdio: ["ignore", "pipe", "pipe"] });
 let output = "";
-xray.stdout.on("data", (chunk) => (output += chunk.toString()));
-xray.stderr.on("data", (chunk) => (output += chunk.toString()));
+core.stdout.on("data", (chunk) => (output += chunk.toString()));
+core.stderr.on("data", (chunk) => (output += chunk.toString()));
 
 try {
   await waitForPort(SOCKS_PORT);
@@ -176,7 +201,7 @@ try {
 
   console.log("vpn smoke test passed");
 } finally {
-  xray.kill();
+  core.kill();
   rmSync(workDir, { recursive: true, force: true });
-  if (output.trim()) console.log(`--- xray ---\n${output.trim()}`);
+  if (output.trim()) console.log(`--- tunnel engine ---\n${output.trim()}`);
 }

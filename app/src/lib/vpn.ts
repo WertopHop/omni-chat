@@ -23,8 +23,17 @@ export type VpnProfile = {
   };
 };
 
+/** Proxy keeps the engine on loopback; TUN routes the machine and needs rights. */
+export type VpnMode = "proxy" | "tun";
+
 export type VpnStatus = {
   running: boolean;
+  /** Selected mode, kept while the tunnel is off. */
+  mode: VpnMode;
+  /** Mode of the tunnel that is currently up. */
+  active_mode: VpnMode | null;
+  elevated: boolean;
+  tun_name: string | null;
   socks_port: number;
   http_port: number;
   connected_at: number | null;
@@ -108,6 +117,11 @@ export async function clearVpnProfile(): Promise<void> {
 
 export async function readVpnStatus(): Promise<VpnStatus> {
   return invoke<VpnStatus>("vpn_status");
+}
+
+/** Switching the mode also stops a running tunnel: routes belong to it. */
+export async function setVpnMode(mode: VpnMode): Promise<VpnStatus> {
+  return invoke<VpnStatus>("vpn_set_mode", { mode });
 }
 
 export async function startVpn(): Promise<VpnStatus> {

@@ -52,16 +52,26 @@ export const ru: Record<MessageKey, string> = {
   "vpn.close": "Закрыть",
   "vpn.unavailable":
     "VPN работает только в настольном приложении: профиль и туннель живут в нативной части клиента.",
-  "vpn.modeNote":
-    "Режим «прокси»: локальный SOCKS/HTTP и системный прокси. Управление всем трафиком и приложениями появится позже.",
+  "vpn.mode.label": "Режим трафика",
+  "vpn.mode.proxy": "Прокси",
+  "vpn.mode.tun": "Весь трафик",
+  "vpn.mode.proxyNote":
+    "Прокси: туннель слушает локальный SOCKS/HTTP, системный прокси указывает на него. Приложения, которые не используют системный прокси, остаются вне туннеля.",
+  "vpn.mode.tunNote":
+    "Весь трафик: все IPv4- и IPv6-соединения машины идут через сервер, DNS тоже уходит в туннель. Windows один раз спросит права администратора при подключении.",
   "vpn.fact.state": "Состояние",
   "vpn.fact.server": "Сервер",
   "vpn.fact.socks": "Локальный SOCKS",
   "vpn.fact.systemProxy": "Системный прокси",
+  "vpn.fact.tunnel": "Туннельный адаптер",
+  "vpn.fact.elevation": "Права",
   "vpn.fact.uptime": "Аптайм",
   "vpn.state.connected": "подключено",
   "vpn.state.connecting": "подключение…",
+  "vpn.state.reconnecting": "переподключение…",
   "vpn.state.disabled": "выключено",
+  "vpn.elevation.admin": "администратор",
+  "vpn.elevation.user": "текущий пользователь",
   "vpn.systemProxy.on": "включён",
   "vpn.systemProxy.off": "выключен",
   "vpn.action.connect": "Включить VPN",

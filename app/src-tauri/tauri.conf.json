@@ -26,7 +26,12 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": ["binaries/xray"],
+    "externalBin": ["binaries/tunnel-core"],
+    "resources": {
+      "binaries/wintun.dll": "wintun.dll",
+      "binaries/licenses/engine.txt": "licenses/engine.txt",
+      "binaries/licenses/wintun.txt": "licenses/wintun.txt"
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

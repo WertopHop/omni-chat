@@ -76,7 +76,7 @@ ensure CHAT_DOMAIN echo localhost
 ensure XRAY_UUID new_uuid
 ensure XRAY_SHORT_ID openssl rand -hex 8
 
-# Reality keypair has to come from Xray itself: the keys are curve25519 and
+# The Reality keypair has to come from the engine itself: the keys are curve25519
 # printed as base64url, which openssl cannot reproduce in the expected form.
 if [ -z "$(get_var XRAY_PRIVATE_KEY)" ] || [ -z "$(get_var XRAY_PUBLIC_KEY)" ]; then
 	XRAY_IMAGE=$(get_var XRAY_IMAGE)
@@ -87,7 +87,7 @@ if [ -z "$(get_var XRAY_PRIVATE_KEY)" ] || [ -z "$(get_var XRAY_PUBLIC_KEY)" ]; 
 	private=$(printf '%s\n' "$keys" | awk 'tolower($1) ~ /^privatekey:?$/ { print $NF }')
 	public=$(printf '%s\n' "$keys" | awk 'tolower($0) ~ /public/ { print $NF }')
 	if [ -z "$private" ] || [ -z "$public" ]; then
-		echo "could not parse 'xray x25519' output:" >&2
+		echo "could not parse the engine's 'x25519' output:" >&2
 		printf '%s\n' "$keys" >&2
 		exit 1
 	fi

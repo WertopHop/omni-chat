@@ -1,11 +1,13 @@
 import { useVpn } from "../hooks/useVpn";
 import { useI18n, type Translate } from "../i18n";
-import type { VpnIssue } from "../lib/vpn";
+import type { VpnIssue, VpnMode } from "../lib/vpn";
 
 type Props = {
   vpn: ReturnType<typeof useVpn>;
   onClose: () => void;
 };
+
+const MODES: VpnMode[] = ["proxy", "tun"];
 
 function formatUptime(connectedAt: number | null, t: Translate): string {
   if (!connectedAt) return t("errors.common.dash");
@@ -24,7 +26,15 @@ function describeIssue(issue: VpnIssue, t: Translate): string {
 
 export function VpnPanel({ vpn, onClose }: Props) {
   const { t } = useI18n();
-  const { available, connected, busy, issue, status } = vpn;
+  const { available, connected, busy, reconnecting, elevated, issue, mode, status } = vpn;
+
+  const state = connected
+    ? t("vpn.state.connected")
+    : reconnecting
+      ? t("vpn.state.reconnecting")
+      : busy
+        ? t("vpn.state.connecting")
+        : t("vpn.state.disabled");
 
   return (
     <aside className="vpn-panel">
@@ -40,25 +50,49 @@ export function VpnPanel({ vpn, onClose }: Props) {
         <p className="vpn-note">{t("vpn.unavailable")}</p>
       ) : (
         <>
-          <p className="vpn-note">{t("vpn.modeNote")}</p>
+          <div className="vpn-modes" role="group" aria-label={t("vpn.mode.label")}>
+            {MODES.map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={mode === value ? "vpn-mode active" : "vpn-mode"}
+                aria-pressed={mode === value}
+                disabled={busy}
+                onClick={() => vpn.setMode(value)}
+              >
+                {t(value === "tun" ? "vpn.mode.tun" : "vpn.mode.proxy")}
+              </button>
+            ))}
+          </div>
+
+          <p className="vpn-note">
+            {t(mode === "tun" ? "vpn.mode.tunNote" : "vpn.mode.proxyNote")}
+          </p>
 
           <dl className="vpn-facts">
             <dt>{t("vpn.fact.state")}</dt>
-            <dd>
-              {connected
-                ? t("vpn.state.connected")
-                : busy
-                  ? t("vpn.state.connecting")
-                  : t("vpn.state.disabled")}
-            </dd>
+            <dd>{state}</dd>
             <dt>{t("vpn.fact.server")}</dt>
             <dd>{status?.host ?? t("errors.common.dash")}</dd>
-            <dt>{t("vpn.fact.socks")}</dt>
-            <dd>127.0.0.1:{status?.socks_port ?? 10808}</dd>
-            <dt>{t("vpn.fact.systemProxy")}</dt>
-            <dd>
-              {status?.system_proxy ? t("vpn.systemProxy.on") : t("vpn.systemProxy.off")}
-            </dd>
+            {mode === "tun" ? (
+              <>
+                <dt>{t("vpn.fact.tunnel")}</dt>
+                <dd>{status?.tun_name ?? t("errors.common.dash")}</dd>
+                <dt>{t("vpn.fact.elevation")}</dt>
+                <dd>
+                  {elevated ? t("vpn.elevation.admin") : t("vpn.elevation.user")}
+                </dd>
+              </>
+            ) : (
+              <>
+                <dt>{t("vpn.fact.socks")}</dt>
+                <dd>127.0.0.1:{status?.socks_port ?? 10808}</dd>
+                <dt>{t("vpn.fact.systemProxy")}</dt>
+                <dd>
+                  {status?.system_proxy ? t("vpn.systemProxy.on") : t("vpn.systemProxy.off")}
+                </dd>
+              </>
+            )}
             <dt>{t("vpn.fact.uptime")}</dt>
             <dd>{formatUptime(status?.connected_at ?? null, t)}</dd>
           </dl>

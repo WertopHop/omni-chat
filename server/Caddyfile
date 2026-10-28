@@ -1,6 +1,6 @@
 # HTTPS terminates here, but only on an internal port. The public 443 belongs to
-# Xray (Reality), which forwards every non-VPN TLS handshake to this server, so
-# certificate issuance can only use the HTTP-01 challenge on port 80.
+# the tunnel engine (VLESS + Reality), which forwards every non-VPN TLS handshake
+# to this server, so certificate issuance can only use HTTP-01 on port 80.
 {
 	http_port 80
 	https_port {$HTTPS_PORT:8443}

@@ -13,14 +13,14 @@ generated configuration files reside in `server/.env` and `server/generated/` (n
 
 ## Architecture
 
-Only **port 443** is exposed to the public; it is managed by Xray (using VLESS + Reality). If a client
-connects with a valid Reality key, the traffic is routed to the VPN. Any other TLS connection
+Only **port 443** is exposed to the public; it is managed by the tunnel engine (VLESS + Reality). If a
+client connects with a valid Reality key, the traffic is routed to the VPN. Any other TLS connection
 (such as from a web browser or a censor's probe) is transparently forwarded to Caddy at `caddy:8443`,
 which then serves a standard HTTPS site containing our API. Port 80 is also used by Caddy for
 ACME HTTP-01 challenges and redirects, as port 443 is already occupied by the proxy.
 
 ```
-client ──443/tcp──> xray ──┬──> VPN traffic (freedom)
+client ──443/tcp──> tunnel ──┬──> VPN traffic (freedom)
 └──fallback──> caddy:8443 ──> gateway / api / events / autumn / january / livekit
 client ──7881/tcp, 50000-50100/udp──> livekit (direct media traffic, bypassing the proxy)
 ```
@@ -106,7 +106,7 @@ checks the whole flow: registration, login, duplicate nickname, invite reuse, ad
 - Server configuration: `templates/xray.json.tpl` → `generated/xray.json`.
 - Clients never edit keys by hand: the desktop app pulls the profile from
   `/api/vpn/profile` (see `app/README.md`).
-- Reality keys are generated once (using Xray’s built-in `x25519` utility) and stored in `.env`.
+- Reality keys are generated once (with the engine's built-in `x25519` utility) and stored in `.env`.
 - Access to private subnets (`geoip:private` → `block`) is restricted within the VPN to prevent the tunnel from being used as an entry point into the infrastructure.
 - `generated/client-vless.txt` contains a `vless://...` link for quick testing with third-party clients; `generated/client-profile.json` contains the same profile, formatted for our application.
 
@@ -144,7 +144,7 @@ configuration can only be truly verified on a live server. Since your local brow
 will not trust Caddy’s CA, you should either use `curl -k` or retrieve the root certificate:
 `docker compose exec caddy cat /data/caddy/pki/authorities/local/root.crt`.
 
-Testing the tunnel itself (launches a one-time Xray client in a container and requests a URL
+Testing the tunnel itself (launches a one-time tunnel client in a container and requests a URL
 via SOCKS):
 
 ```bash

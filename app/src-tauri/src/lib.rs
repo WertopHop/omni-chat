@@ -19,6 +19,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             vpn::vpn_set_profile,
             vpn::vpn_clear_profile,
+            vpn::vpn_set_mode,
             vpn::vpn_start,
             vpn::vpn_stop,
             vpn::vpn_status

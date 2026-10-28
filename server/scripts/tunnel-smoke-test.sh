@@ -2,7 +2,7 @@
 #
 # Smoke test for the VPN entry point.
 #
-# Starts a throwaway Xray client in Docker, sends one request through its local
+# Starts a throwaway tunnel client in Docker, sends one request through its local
 # SOCKS inbound and prints the result. Proves that the Reality handshake,
 # the credentials in .env and the server routing all work together.
 #
