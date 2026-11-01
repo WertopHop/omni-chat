@@ -314,6 +314,11 @@ textarea {
   line-height: 1;
 }
 
+.rail-item.home {
+  font-size: 18px;
+  line-height: 1;
+}
+
 .rail-item.add:hover {
   border-style: solid;
   color: #fff;
@@ -327,11 +332,18 @@ textarea {
 }
 
 .channels-header {
-  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 12px 14px 16px;
   font-weight: 700;
   border-bottom: 1px solid #34363c;
-  white-space: nowrap;
+}
+
+.channels-title {
+  flex: 1;
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
 }
 
@@ -449,6 +461,23 @@ textarea {
 .voice-state {
   color: var(--text-dim);
   font-size: 11px;
+}
+
+.voice-quality {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text-dim);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.voice-quality.excellent {
+  color: var(--ok);
+}
+
+.voice-quality.poor {
+  color: var(--danger);
 }
 
 .voice-peers {
@@ -979,6 +1008,89 @@ textarea {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.link {
+  align-self: flex-start;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: underline;
+}
+
+.link:hover {
+  color: var(--accent-hover);
+}
+
+.primary.danger {
+  background: var(--danger);
+}
+
+.primary.danger:hover:not(:disabled) {
+  background: #e0645f;
+}
+
+.invite-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.invite-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--bg-deep);
+}
+
+.invite-list code {
+  flex: 1;
+  overflow: hidden;
+  font-size: 13px;
+  letter-spacing: 0.4px;
+  text-overflow: ellipsis;
+}
+
+/* ---------- context menu ---------- */
+
+.context-menu {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 5px;
+  border: 1px solid #3d3f46;
+  border-radius: 10px;
+  background: rgba(38, 39, 43, 0.99);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+}
+
+.context-menu button {
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+}
+
+.context-menu button:hover {
+  background: var(--bg-elevated);
+}
+
+.context-menu button.danger {
+  color: #f1a19f;
 }
 
 /* ---------- messages ---------- */

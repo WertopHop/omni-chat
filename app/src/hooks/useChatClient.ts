@@ -7,7 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Client } from "stoat.js";
 
-import { loadDirectMessages } from "../lib/community";
+import { loadDirectMessages, loadFriends } from "../lib/community";
 import { fetchServerInfo } from "../lib/server";
 import { apiBaseUrl, type Session } from "../lib/session";
 
@@ -38,11 +38,11 @@ export function useChatClient(serverUrl: string, session: Session) {
 client.on("ready", () => {
   setReady(true);
   bump();
-  // Direct messages are not part of the sync payload, so they are asked
-  // for once the socket is up.
-  loadDirectMessages(client)
+  // Direct messages and friends are not part of the sync payload, so they
+  // are asked for once the socket is up.
+  Promise.all([loadDirectMessages(client), loadFriends(client)])
     .then(bump)
-    .catch((error) => console.error("failed to load direct messages", error));
+    .catch((error) => console.error("failed to load the home lists", error));
 });
 client.on("connected", () => {
   setConnected(true);

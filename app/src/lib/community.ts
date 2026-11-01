@@ -115,6 +115,25 @@ export async function addFriend(client: Client, input: string): Promise<User> {
   return client.users.getOrCreate(data._id, data as never);
 }
 
+/**
+ * The self user carries the relationship list, but only as ids, so the friends
+ * are resolved once and then show up by name on the home screen.
+ */
+export async function loadFriends(client: Client): Promise<void> {
+  const me = await apiGet<{ relations?: { _id: string; status?: string }[] }>(
+    client,
+    "/users/@me",
+  );
+  const friends = (me.relations ?? []).filter(
+    (relation) => relation.status === "Friend",
+  );
+  await Promise.all(
+    friends.map((relation) =>
+      client.users.fetch(relation._id).catch(() => undefined),
+    ),
+  );
+}
+
 /** Direct messages are not part of the initial sync, so fetch them once. */
 export async function loadDirectMessages(client: Client): Promise<Channel[]> {
   const channels = await apiGet<ApiChannel[]>(client, "/users/dms");

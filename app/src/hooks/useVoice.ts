@@ -11,7 +11,7 @@
  * and is applied to the current call through `switchActiveDevice`.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Room, RoomEvent, Track } from "livekit-client";
+import { ConnectionQuality, Room, RoomEvent, Track } from "livekit-client";
 import type { Channel } from "stoat.js";
 
 import type { MessageKey } from "../i18n";
@@ -41,6 +41,12 @@ export type VoiceState = {
   error: MessageKey | null;
   /** Microphone peak level, 0..1; zero while muted or not in a call. */
   micLevel: number;
+  /**
+   * Link quality as the media engine sees it (round trip and loss), which is
+   * the only latency signal the client can show without probing the network
+   * itself.
+   */
+  quality: ConnectionQuality;
 };
 
 const IDLE: VoiceState = {
@@ -53,6 +59,7 @@ const IDLE: VoiceState = {
   audioBlocked: false,
   error: null,
   micLevel: 0,
+  quality: ConnectionQuality.Unknown,
 };
 
 type Selection = { input: string | null; output: string | null };
@@ -212,6 +219,12 @@ export function useVoice(serverUrl: string) {
       });
       room.on(RoomEvent.ParticipantMetadataChanged, emit);
       room.on(RoomEvent.AudioPlaybackStatusChanged, emit);
+      room.on(RoomEvent.ConnectionQualityChanged, (quality, participant) => {
+        if (participant !== room.localParticipant) return;
+        setState((current) =>
+          current.status === "idle" ? current : { ...current, quality },
+        );
+      });
       room.on(RoomEvent.Disconnected, () => {
         // Anything but our own leave clears the room and tells the user.
         if (roomRef.current !== room) return;
@@ -268,6 +281,7 @@ export function useVoice(serverUrl: string) {
           audioBlocked: !room.canPlaybackAudio,
           error: micError,
           micLevel: 0,
+          quality: room.localParticipant.connectionQuality,
         });
         if (!muted) startMeter();
         await room.startAudio().catch(() => undefined);
@@ -382,6 +396,7 @@ export function useVoice(serverUrl: string) {
     audioBlocked: state.audioBlocked,
     error: state.error,
     micLevel: state.micLevel,
+    quality: state.quality,
     inputs: devices.inputs as AudioDevice[],
     outputs: devices.outputs as AudioDevice[],
     inputId: selection.input,

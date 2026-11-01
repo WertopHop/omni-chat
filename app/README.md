@@ -172,13 +172,41 @@ the real device. The chosen microphone is passed to the room as
 the channel name is computed from the track the room already publishes, so it also
 works as a microphone test without a second capture.
 
-Channels only exist inside a server, so a fresh account first creates one from the
-sidebar or the `+` in the server rail; the backend adds a `General` text channel
-and the voice section appears next to it.
+The strip also shows the link quality the media engine reports
+(`ConnectionQuality` from round trip and loss), which is the one latency signal
+the client can offer without probing the network itself.
 
 Signalling goes through the reverse proxy (`wss://<domain>/livekit`) while media
-flows directly over `7881/tcp` and the UDP range, which keeps a full tunnel
-carrying the media too.
+flows over `7881/tcp` and the UDP range. In a full tunnel those packets travel
+inside the VLESS+Reality TCP stream: the tunnel is the default route, so nothing
+has to be added for the media to stay inside it, but on lossy links the TCP queue
+is felt. Compare the quality badge with the tunnel on and off on the deployed
+server.
+
+## Servers, invites and direct messages
+
+Channels only exist inside a server, so a fresh account first creates one from the
+sidebar or the `+` in the server rail; the backend adds a `General` text channel
+and the voice section appears next to it. The same dialog joins an existing server
+by invite code.
+
+- **Invites.** The header of every server has an "Invite" button: it lists the
+  codes already issued (`GET /servers/<id>/invites`) and mints new ones
+  (`POST /channels/<id>/invites`). Codes are reusable until the invite is deleted,
+  and a friend pastes one into "Add a server → Join a server"
+  (`POST /invites/<code>`, which answers with the server and its channels).
+- **Cleanup.** Right-click a channel to delete it (`DELETE /channels/<id>`), and a
+  server in the rail to delete it as the owner or to leave it as a member. Both go
+  through a confirmation dialog.
+- **Direct messages.** The first item in the rail opens the home screen with
+  friends and personal chats. A chat with a nickname is `GET /users/<name>/dm`,
+  a friend is `PUT /users/<name>/friend`; both accept the nickname the account
+  signed up with.
+- [`src/lib/community.ts`](src/lib/community.ts:1) wraps those calls: the SDK only
+  renders what its collections hold, so each response is hydrated into
+  `client.channels`, `client.servers` or `client.users` before it is returned.
+  Direct messages are not part of the initial sync, so they are fetched once the
+  socket reports ready.
 
 Check the chain without a microphone:
 
@@ -233,9 +261,12 @@ copying `src-tauri/icons/128x128.png` after regenerating.
 ```
 src/
   i18n/       typed dictionaries (en, ru) and the language provider
-  lib/        gateway calls, session persistence, URL helpers, VPN bridge
-  hooks/      useChatClient (SDK client and events), useVpn (tunnel state)
-  components/ LoginScreen, ChatShell, VpnPanel, LanguageSwitcher
+  lib/        gateway calls, session persistence, URL helpers, VPN bridge,
+              community.ts (invites, direct messages, friends)
+  hooks/      useChatClient (SDK client and events), useVpn (tunnel state),
+              useVoice (room, devices, meter)
+  components/ LoginScreen, ChatShell, VpnPanel, VoiceBar, Modal, ContextMenu,
+              LanguageSwitcher
 ```
 
 ## Localization
@@ -256,10 +287,9 @@ Placeholders use `{name}` syntax.
 
 ## Roadmap
 
-- attachments, replies, reactions, DMs, member list;
+- attachments, replies, reactions and the member list of a server;
 - admin panel for invites and accounts;
-- membership invites from the client, so a second account does not need the
-  server-side script.
+- the session token in the OS keyring instead of `localStorage`.
 
 
 ---

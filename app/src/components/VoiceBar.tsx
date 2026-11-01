@@ -1,11 +1,42 @@
 import { useState } from "react";
+import { ConnectionQuality } from "livekit-client";
 
 import { useVoice } from "../hooks/useVoice";
-import { useI18n } from "../i18n";
+import { useI18n, type Translate } from "../i18n";
 
 type Props = {
   voice: ReturnType<typeof useVoice>;
 };
+
+/**
+ * The media engine grades the link by round trip and loss; showing it turns a
+ * "the call sounds bad" report into something the user can point at.
+ */
+function qualityLabel(t: Translate, quality: ConnectionQuality): string {
+  switch (quality) {
+    case ConnectionQuality.Excellent:
+      return t("voice.quality.excellent");
+    case ConnectionQuality.Good:
+      return t("voice.quality.good");
+    case ConnectionQuality.Poor:
+      return t("voice.quality.poor");
+    default:
+      return t("voice.quality.unknown");
+  }
+}
+
+function qualityTone(quality: ConnectionQuality): string {
+  switch (quality) {
+    case ConnectionQuality.Excellent:
+      return "excellent";
+    case ConnectionQuality.Good:
+      return "good";
+    case ConnectionQuality.Poor:
+      return "poor";
+    default:
+      return "unknown";
+  }
+}
 
 /**
  * Compact call strip in the channel sidebar: who is in the call, who is
@@ -27,6 +58,14 @@ export function VoiceBar({ voice }: Props) {
         <span className={connecting ? "voice-dot" : "voice-dot on"} />
         <span className="voice-channel">{voice.channelName}</span>
         {connecting && <span className="voice-state">{t("voice.connecting")}</span>}
+        {!connecting && (
+          <span
+            className={`voice-quality ${qualityTone(voice.quality)}`}
+            title={t("voice.quality.title")}
+          >
+            {qualityLabel(t, voice.quality)}
+          </span>
+        )}
         <button
           className={settingsOpen ? "voice-btn settings on" : "voice-btn settings"}
           title={t("voice.settings")}
