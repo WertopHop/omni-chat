@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Client } from "stoat.js";
 
+import { loadDirectMessages } from "../lib/community";
 import { fetchServerInfo } from "../lib/server";
 import { apiBaseUrl, type Session } from "../lib/session";
 
@@ -34,20 +35,31 @@ export function useChatClient(serverUrl: string, session: Session) {
         error instanceof Error ? error.message : String(error);
       setFailure(message);
     };
-
-    client.on("ready", () => {
-      setReady(true);
-      bump();
-    });
-    client.on("connected", () => {
-      setConnected(true);
-      bump();
-    });
-    client.on("disconnected", () => setConnected(false));
-    client.on("messageCreate", bump);
-    client.on("messageUpdate", bump);
-    client.on("channelCreate", bump);
-    client.on("channelDelete", bump);
+client.on("ready", () => {
+  setReady(true);
+  bump();
+  // Direct messages are not part of the sync payload, so they are asked
+  // for once the socket is up.
+  loadDirectMessages(client)
+    .then(bump)
+    .catch((error) => console.error("failed to load direct messages", error));
+});
+client.on("connected", () => {
+  setConnected(true);
+  bump();
+});
+client.on("disconnected", () => setConnected(false));
+client.on("messageCreate", bump);
+client.on("messageUpdate", bump);
+client.on("channelCreate", bump);
+client.on("channelUpdate", bump);
+client.on("channelDelete", bump);
+client.on("serverCreate", bump);
+client.on("serverUpdate", bump);
+client.on("serverDelete", bump);
+client.on("serverLeave", bump);
+client.on("userUpdate", bump);
+client.on("error", handleError);
     client.on("error", handleError);
 
     // The websocket address comes from the API root payload, without it the
