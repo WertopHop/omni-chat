@@ -1,8 +1,9 @@
 /**
  * End-to-end check of the VPN path, without the desktop shell:
  * gateway profile endpoint -> local tunnel sidecar (proxy mode) -> a request
- * that leaves through the tunnel. The full tunnel config is validated as well,
- * since starting it needs administrator rights and cannot run here.
+ * that leaves through the tunnel. The full tunnel config, including the
+ * per-application rules, is validated as well, since starting it needs
+ * administrator rights and cannot run here.
  *
  * Run against a local stack:
  *   set NODE_EXTRA_CA_CERTS=..\server\generated\caddy-root.crt
@@ -44,7 +45,27 @@ function sidecarPath() {
   return join(dir, binary);
 }
 
-function renderConfig(profile, mode = "proxy") {
+const PRIVATE_CIDRS = [
+  "127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+  "169.254.0.0/16", "::1/128", "fc00::/7", "fe80::/10",
+];
+
+const privateRule = { type: "field", ip: PRIVATE_CIDRS, outboundTag: "direct" };
+
+/** Mirrors tun_rules() in vpn.rs; "only" needs the catch-all below it. */
+function tunRules(policy, apps) {
+  const rules = [privateRule];
+  if (policy === "all" || apps.length === 0) return rules;
+  if (policy === "only") {
+    rules.push({ type: "field", process: apps, outboundTag: "proxy" });
+    rules.push({ type: "field", network: "tcp,udp", outboundTag: "direct" });
+  } else {
+    rules.push({ type: "field", process: apps, outboundTag: "direct" });
+  }
+  return rules;
+}
+
+function renderConfig(profile, mode = "proxy", policy = "all", apps = []) {
   const inbounds = [
     { tag: "socks", listen: "127.0.0.1", port: SOCKS_PORT, protocol: "socks", settings: { auth: "noauth", udp: false } },
     { tag: "http", listen: "127.0.0.1", port: HTTP_PORT, protocol: "http" },
@@ -99,14 +120,7 @@ function renderConfig(profile, mode = "proxy") {
     routing: {
       domainStrategy: "AsIs",
       // Explicit ranges instead of geoip:private: the sidecar has no geoip.dat.
-      rules: [
-        {
-          type: "field",
-          ip: ["127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
-            "169.254.0.0/16", "::1/128", "fc00::/7", "fe80::/10"],
-          outboundTag: "direct",
-        },
-      ],
+      rules: mode === "tun" ? tunRules(policy, apps) : [privateRule],
     },
   };
 }
@@ -170,6 +184,14 @@ const tunConfigPath = join(workDir, "tunnel-tun.json");
 writeFileSync(tunConfigPath, JSON.stringify(renderConfig(profile, "tun"), null, 2));
 execFileSync(sidecarPath(), ["-test", "-c", tunConfigPath], { stdio: "pipe" });
 console.log("full tunnel config: valid");
+
+const splitApps = ["chrome", "C:/Program Files/Steam/steam.exe"];
+for (const policy of ["only", "except"]) {
+  const path = join(workDir, `tunnel-${policy}.json`);
+  writeFileSync(path, JSON.stringify(renderConfig(profile, "tun", policy, splitApps), null, 2));
+  execFileSync(sidecarPath(), ["-test", "-c", path], { stdio: "pipe" });
+}
+console.log("application rules: valid");
 
 const core = spawn(sidecarPath(), ["-c", configPath], { stdio: ["ignore", "pipe", "pipe"] });
 let output = "";

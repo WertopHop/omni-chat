@@ -26,6 +26,12 @@ export type VpnProfile = {
 /** Proxy keeps the engine on loopback; TUN routes the machine and needs rights. */
 export type VpnMode = "proxy" | "tun";
 
+/**
+ * How the application list applies in full tunnel mode. Proxy mode has no
+ * split: an application either uses the local port or it does not.
+ */
+export type AppPolicy = "all" | "only" | "except";
+
 export type VpnStatus = {
   running: boolean;
   /** Selected mode, kept while the tunnel is off. */
@@ -34,6 +40,11 @@ export type VpnStatus = {
   active_mode: VpnMode | null;
   elevated: boolean;
   tun_name: string | null;
+  policy: AppPolicy;
+  /** Process names or full paths sent to the routing rule. */
+  apps: string[];
+  /** The running tunnel was started with another list; reconnect to apply. */
+  apps_pending: boolean;
   socks_port: number;
   http_port: number;
   connected_at: number | null;
@@ -122,6 +133,16 @@ export async function readVpnStatus(): Promise<VpnStatus> {
 /** Switching the mode also stops a running tunnel: routes belong to it. */
 export async function setVpnMode(mode: VpnMode): Promise<VpnStatus> {
   return invoke<VpnStatus>("vpn_set_mode", { mode });
+}
+
+/** Stores the list only; a running tunnel picks it up on the next connect. */
+export async function setVpnApps(policy: AppPolicy, apps: string[]): Promise<VpnStatus> {
+  return invoke<VpnStatus>("vpn_set_apps", { policy, apps });
+}
+
+/** Names of the processes running now, without the extension. */
+export async function listVpnProcesses(): Promise<string[]> {
+  return invoke<string[]>("vpn_list_processes");
 }
 
 export async function startVpn(): Promise<VpnStatus> {

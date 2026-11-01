@@ -7,6 +7,12 @@
 //! machine into it, which does: the tunnel is started from an elevated
 //! PowerShell wrapper (one UAC prompt) that watches this process and is
 //! stopped through a stop file, because a non-elevated app cannot kill it.
+//!
+//! Full tunnel mode can also split traffic by application: the engine maps a
+//! connection back to the process that opened it, so a list of names (or full
+//! paths) either becomes the only traffic inside the tunnel or the traffic that
+//! stays outside. Proxy mode has no such split, because a loopback inbound
+//! cannot tell which process connected.
 
 use std::collections::VecDeque;
 use std::io::{Read, Seek, SeekFrom};
@@ -27,6 +33,8 @@ pub const HTTP_PORT: u16 = 10809;
 const STARTUP_TIMEOUT: Duration = Duration::from_secs(20);
 const STOP_TIMEOUT: Duration = Duration::from_secs(8);
 const MAX_LOG_LINES: usize = 200;
+/// Enough for a several-page list; the engine keeps each entry in the config.
+const MAX_APPS: usize = 64;
 const PROFILE_FILE: &str = "vpn-profile.json";
 const SETTINGS_FILE: &str = "vpn-settings.json";
 const CONFIG_FILE: &str = "tunnel.json";
@@ -49,6 +57,19 @@ pub enum VpnMode {
     #[default]
     Proxy,
     Tun,
+}
+
+/// How the application list is applied in full tunnel mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum AppPolicy {
+    /// Every connection goes through the tunnel.
+    #[default]
+    All,
+    /// Only the listed applications go through the tunnel.
+    Only,
+    /// The listed applications keep the normal route, the rest goes through.
+    Except,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -85,6 +106,11 @@ pub struct VpnStatus {
     /// True when the tunnel runs outside of this process' token.
     pub elevated: bool,
     pub tun_name: Option<String>,
+    pub policy: AppPolicy,
+    pub apps: Vec<String>,
+    /// True when the running tunnel was started with a different application
+    /// list, so the UI can ask for a reconnect instead of pretending it applied.
+    pub apps_pending: bool,
     pub socks_port: u16,
     pub http_port: u16,
     pub connected_at: Option<u64>,
@@ -105,9 +131,14 @@ pub struct VpnState {
 struct Inner {
     profile: Option<Profile>,
     mode: VpnMode,
+    policy: AppPolicy,
+    apps: Vec<String>,
     settings_loaded: bool,
     child: Option<tauri_plugin_shell::process::CommandChild>,
     running_mode: Option<VpnMode>,
+    /// Settings the running tunnel was rendered with.
+    active_policy: AppPolicy,
+    active_apps: Vec<String>,
     elevated: bool,
     connected_at: Option<u64>,
     error: Option<String>,
@@ -142,6 +173,8 @@ impl VpnState {
         inner.child = None;
         inner.elevated = false;
         inner.running_mode = None;
+        inner.active_policy = AppPolicy::All;
+        inner.active_apps.clear();
         inner.connected_at = None;
         inner.log_path = None;
         inner.log_offset = 0;
@@ -228,12 +261,45 @@ const PRIVATE_CIDRS: [&str; 8] = [
     "fe80::/10",
 ];
 
+fn private_rule() -> Value {
+    json!({ "type": "field", "ip": PRIVATE_CIDRS, "outboundTag": "direct" })
+}
+
+/// Rules are evaluated top to bottom, and the tunnel is the first outbound, so
+/// it carries whatever no rule claims. That is why "only" needs a catch-all
+/// that hands the rest of the machine back to the normal route.
+fn tun_rules(policy: AppPolicy, apps: &[String]) -> Vec<Value> {
+    // Loopback and LAN stay direct even for a listed application: local
+    // services must not be pushed through the tunnel.
+    let mut rules = vec![private_rule()];
+    if apps.is_empty() || policy == AppPolicy::All {
+        return rules;
+    }
+    match policy {
+        AppPolicy::Only => {
+            rules.push(json!({ "type": "field", "process": apps, "outboundTag": "proxy" }));
+            rules.push(json!({ "type": "field", "network": "tcp,udp", "outboundTag": "direct" }));
+        }
+        AppPolicy::Except => {
+            rules.push(json!({ "type": "field", "process": apps, "outboundTag": "direct" }));
+        }
+        AppPolicy::All => {}
+    }
+    rules
+}
+
 /// Builds the engine config. Private ranges go direct to avoid loops; the rest
 /// uses the VLESS+Reality outbound from the profile. In TUN mode a Wintun
 /// inbound captures the whole machine, and the engine binds its own uplink to
 /// the physical interface (`autoOutboundsInterface` is implied by the routes), so
 /// it does not send itself into the tunnel.
-fn render_config(profile: &Profile, mode: VpnMode, error_log: Option<&Path>) -> Value {
+fn render_config(
+    profile: &Profile,
+    mode: VpnMode,
+    error_log: Option<&Path>,
+    policy: AppPolicy,
+    apps: &[String],
+) -> Value {
     let flow = if profile.flow.is_empty() {
         Value::Null
     } else {
@@ -322,9 +388,11 @@ fn render_config(profile: &Profile, mode: VpnMode, error_log: Option<&Path>) -> 
         ],
         "routing": {
             "domainStrategy": "AsIs",
-            "rules": [
-                { "type": "field", "ip": PRIVATE_CIDRS, "outboundTag": "direct" }
-            ]
+            "rules": if mode == VpnMode::Tun {
+                tun_rules(policy, apps)
+            } else {
+                vec![private_rule()]
+            }
         }
     })
 }
@@ -621,6 +689,49 @@ fn refresh(state: &VpnState) {
 #[derive(Serialize, Deserialize)]
 struct Settings {
     mode: VpnMode,
+    /// Files written before the application list existed load with defaults.
+    #[serde(default)]
+    policy: AppPolicy,
+    #[serde(default)]
+    apps: Vec<String>,
+}
+
+impl Settings {
+    fn from_inner(inner: &Inner) -> Self {
+        Self {
+            mode: inner.mode,
+            policy: inner.policy,
+            apps: inner.apps.clone(),
+        }
+    }
+}
+
+/// Turns what the user typed or picked into what the engine compares against.
+///
+/// The engine compares names as-is and strips a trailing `.exe` itself, so the
+/// only work here is dropping the noise a paste can bring: whitespace, Windows
+/// separators and duplicates in a different case.
+fn normalize_apps(input: &[String]) -> Vec<String> {
+    let mut apps: Vec<String> = Vec::new();
+    for raw in input {
+        let mut name = raw.trim().replace('\\', "/");
+        if !name.contains('/') {
+            if let Some(stem) = name.strip_suffix(".exe").or_else(|| name.strip_suffix(".EXE")) {
+                name = stem.to_string();
+            }
+        }
+        if name.is_empty() {
+            continue;
+        }
+        if apps.iter().any(|known| known.eq_ignore_ascii_case(&name)) {
+            continue;
+        }
+        apps.push(name);
+        if apps.len() == MAX_APPS {
+            break;
+        }
+    }
+    apps
 }
 
 fn save_profile(dir: &Path, profile: &Profile) -> Result<(), String> {
@@ -629,29 +740,35 @@ fn save_profile(dir: &Path, profile: &Profile) -> Result<(), String> {
     std::fs::write(dir.join(PROFILE_FILE), encoded).map_err(|error| format!("profile: {error}"))
 }
 
-fn save_settings(dir: &Path, mode: VpnMode) -> Result<(), String> {
-    let encoded = serde_json::to_vec_pretty(&Settings { mode })
+fn save_settings(dir: &Path, settings: &Settings) -> Result<(), String> {
+    let encoded = serde_json::to_vec_pretty(settings)
         .map_err(|error| format!("settings: {error}"))?;
     std::fs::write(dir.join(SETTINGS_FILE), encoded).map_err(|error| format!("settings: {error}"))
 }
 
-fn load_settings(dir: &Path) -> VpnMode {
+fn load_settings(dir: &Path) -> Settings {
     std::fs::read(dir.join(SETTINGS_FILE))
         .ok()
         .and_then(|bytes| serde_json::from_slice::<Settings>(&bytes).ok())
-        .map(|settings| settings.mode)
-        .unwrap_or_default()
+        .unwrap_or(Settings {
+            mode: VpnMode::Proxy,
+            policy: AppPolicy::All,
+            apps: Vec::new(),
+        })
 }
 
-/// Reads the persisted mode once, before the UI asks for the status.
-fn load_mode(app: &AppHandle, state: &VpnState) {
+/// Reads the persisted choice once, before the UI asks for the status.
+fn load_settings_once(app: &AppHandle, state: &VpnState) {
     let mut inner = state.inner.lock().unwrap();
     if inner.settings_loaded {
         return;
     }
     inner.settings_loaded = true;
     if let Ok(dir) = vpn_dir(app) {
-        inner.mode = load_settings(&dir);
+        let settings = load_settings(&dir);
+        inner.mode = settings.mode;
+        inner.policy = settings.policy;
+        inner.apps = normalize_apps(&settings.apps);
     }
 }
 
@@ -668,6 +785,11 @@ fn to_status(inner: &Inner) -> VpnStatus {
             Some(VpnMode::Tun) if running => Some(TUN_NAME.to_string()),
             _ => None,
         },
+        policy: inner.policy,
+        apps: inner.apps.clone(),
+        apps_pending: running
+            && inner.running_mode == Some(VpnMode::Tun)
+            && (inner.policy != inner.active_policy || inner.apps != inner.active_apps),
         socks_port: SOCKS_PORT,
         http_port: HTTP_PORT,
         connected_at: inner.connected_at,
@@ -702,7 +824,7 @@ pub fn vpn_clear_profile(app: AppHandle, state: State<'_, VpnState>) -> Result<(
 
 #[tauri::command]
 pub fn vpn_status(app: AppHandle, state: State<'_, VpnState>) -> VpnStatus {
-    load_mode(&app, &state);
+    load_settings_once(&app, &state);
     refresh(&state);
     to_status(&state.inner.lock().unwrap())
 }
@@ -713,18 +835,95 @@ pub fn vpn_set_mode(
     state: State<'_, VpnState>,
     mode: VpnMode,
 ) -> Result<VpnStatus, String> {
-    load_mode(&app, &state);
+    load_settings_once(&app, &state);
     let current = state.inner.lock().unwrap().mode;
     if current != mode {
         // Routes and the system proxy belong to the mode, so switch cleanly.
         stop_inner(&state);
-        save_settings(&vpn_dir(&app)?, mode)?;
+        let settings = {
+            let inner = state.inner.lock().unwrap();
+            Settings {
+                mode,
+                policy: inner.policy,
+                apps: inner.apps.clone(),
+            }
+        };
+        save_settings(&vpn_dir(&app)?, &settings)?;
         let mut inner = state.inner.lock().unwrap();
         inner.mode = mode;
         inner.error = None;
         inner.logs.clear();
     }
     Ok(to_status(&state.inner.lock().unwrap()))
+}
+
+/// Stores the application list. A running tunnel keeps the rules it was
+/// rendered with, so the status reports the change as pending instead of
+/// prompting for rights on every checkbox; the user reconnects when done.
+#[tauri::command]
+pub fn vpn_set_apps(
+    app: AppHandle,
+    state: State<'_, VpnState>,
+    policy: AppPolicy,
+    apps: Vec<String>,
+) -> Result<VpnStatus, String> {
+    load_settings_once(&app, &state);
+    let apps = normalize_apps(&apps);
+    let settings = {
+        let mut inner = state.inner.lock().unwrap();
+        inner.policy = policy;
+        inner.apps = apps;
+        Settings::from_inner(&inner)
+    };
+    save_settings(&vpn_dir(&app)?, &settings)?;
+    Ok(to_status(&state.inner.lock().unwrap()))
+}
+
+/// Process names the routing rule compares against: file names without the
+/// extension. Asking the system keeps the picker honest about what is running.
+#[tauri::command]
+pub fn vpn_list_processes() -> Result<Vec<String>, String> {
+    use std::process::Command;
+
+    let (program, args): (&str, &[&str]) = if cfg!(windows) {
+        (
+            "powershell.exe",
+            &[
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "Get-Process | Select-Object -ExpandProperty Name | Sort-Object -Unique",
+            ],
+        )
+    } else {
+        ("ps", &["-eo", "comm="])
+    };
+    let mut command = Command::new(program);
+    command.args(args);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let output = command
+        .output()
+        .map_err(|error| format!("process list: {error}"))?;
+    if !output.status.success() {
+        return Err("process list: the system refused the request".to_string());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut names: Vec<String> = stdout
+        .lines()
+        .map(|line| line.trim())
+        .filter(|line| !line.is_empty())
+        .map(|line| line.trim_end_matches(".exe").to_string())
+        .collect();
+    names.sort_by_key(|name| name.to_lowercase());
+    names.dedup_by(|a, b| a.eq_ignore_ascii_case(b.as_str()));
+    Ok(names)
 }
 
 fn spawn_sidecar(app: &AppHandle, state: &VpnState, config_path: &Path) -> Result<(), String> {
@@ -771,10 +970,10 @@ pub fn vpn_start(app: AppHandle, state: State<'_, VpnState>) -> Result<VpnStatus
         return Ok(to_status(&state.inner.lock().unwrap()));
     }
 
-    load_mode(&app, &state);
+    load_settings_once(&app, &state);
     let dir = vpn_dir(&app)?;
 
-    let (profile, mode) = {
+    let (profile, mode, policy, apps) = {
         let mut inner = state.inner.lock().unwrap();
         inner.error = None;
         inner.logs.clear();
@@ -790,7 +989,7 @@ pub fn vpn_start(app: AppHandle, state: State<'_, VpnState>) -> Result<VpnStatus
                 profile
             }
         };
-        (profile, inner.mode)
+        (profile, inner.mode, inner.policy, inner.apps.clone())
     };
 
     if mode == VpnMode::Tun {
@@ -806,7 +1005,7 @@ pub fn vpn_start(app: AppHandle, state: State<'_, VpnState>) -> Result<VpnStatus
     }
 
     let config_path = dir.join(CONFIG_FILE);
-    let config = render_config(&profile, mode, error_log.as_deref());
+    let config = render_config(&profile, mode, error_log.as_deref(), policy, &apps);
     std::fs::write(
         &config_path,
         serde_json::to_vec_pretty(&config).map_err(|error| error.to_string())?,
@@ -868,9 +1067,18 @@ pub fn vpn_start(app: AppHandle, state: State<'_, VpnState>) -> Result<VpnStatus
             "full tunnel is up: IPv4 and IPv6 go through '{TUN_NAME}'"
         ));
     }
+    if mode == VpnMode::Tun && policy != AppPolicy::All && !apps.is_empty() {
+        state.push_log(format!(
+            "{} application(s) are {} the tunnel",
+            apps.len(),
+            if policy == AppPolicy::Only { "inside" } else { "outside" }
+        ));
+    }
 
     let mut inner = state.inner.lock().unwrap();
     inner.connected_at = Some(now_ms());
+    inner.active_policy = policy;
+    inner.active_apps = apps;
     Ok(to_status(&inner))
 }
 
@@ -915,6 +1123,8 @@ fn stop_inner(state: &VpnState) {
     let mut inner = state.inner.lock().unwrap();
     inner.connected_at = None;
     inner.running_mode = None;
+    inner.active_policy = AppPolicy::All;
+    inner.active_apps.clear();
     inner.elevated = false;
     inner.log_path = None;
     inner.log_offset = 0;
@@ -962,7 +1172,7 @@ mod tests {
 
     #[test]
     fn config_keeps_inbounds_on_loopback() {
-        let config = render_config(&sample(), VpnMode::Proxy, None);
+        let config = render_config(&sample(), VpnMode::Proxy, None, AppPolicy::All, &[]);
         let inbounds = config["inbounds"].as_array().expect("inbounds");
         assert_eq!(inbounds.len(), 2);
         for inbound in inbounds {
@@ -975,7 +1185,7 @@ mod tests {
     #[test]
     fn tun_mode_adds_wintun_inbound() {
         let log = Path::new("C:/tmp/tunnel.log");
-        let config = render_config(&sample(), VpnMode::Tun, Some(log));
+        let config = render_config(&sample(), VpnMode::Tun, Some(log), AppPolicy::All, &[]);
         let inbounds = config["inbounds"].as_array().expect("inbounds");
         let tun = inbounds
             .iter()
@@ -993,7 +1203,7 @@ mod tests {
 
     #[test]
     fn proxy_mode_has_no_tun_inbound() {
-        let config = render_config(&sample(), VpnMode::Proxy, None);
+        let config = render_config(&sample(), VpnMode::Proxy, None, AppPolicy::All, &[]);
         let inbounds = config["inbounds"].as_array().expect("inbounds");
         assert!(inbounds.iter().all(|inbound| inbound["protocol"] != "tun"));
         assert!(config["log"]["error"].is_null());
@@ -1033,8 +1243,53 @@ mod tests {
     }
 
     #[test]
+    fn tun_rules_follow_the_policy() {
+        let apps = normalize_apps(&[
+            "  Chrome.EXE ".to_string(),
+            "chrome".to_string(),
+            r"C:\Program Files\Steam\steam.exe".to_string(),
+            "   ".to_string(),
+        ]);
+        assert_eq!(
+            apps,
+            vec![
+                "Chrome".to_string(),
+                "C:/Program Files/Steam/steam.exe".to_string()
+            ]
+        );
+
+        let all = render_config(&sample(), VpnMode::Tun, None, AppPolicy::All, &apps);
+        assert_eq!(all["routing"]["rules"].as_array().unwrap().len(), 1);
+
+        let only = render_config(&sample(), VpnMode::Tun, None, AppPolicy::Only, &apps);
+        let rules = only["routing"]["rules"].as_array().unwrap();
+        assert_eq!(rules.len(), 3);
+        assert_eq!(rules[1]["process"][0], "Chrome");
+        assert_eq!(rules[1]["outboundTag"], "proxy");
+        // Without the catch-all the tunnel, being the first outbound, would
+        // still carry every application.
+        assert_eq!(rules[2]["network"], "tcp,udp");
+        assert_eq!(rules[2]["outboundTag"], "direct");
+
+        let except = render_config(&sample(), VpnMode::Tun, None, AppPolicy::Except, &apps);
+        let rules = except["routing"]["rules"].as_array().unwrap();
+        assert_eq!(rules.len(), 2);
+        assert_eq!(rules[1]["process"][1], "C:/Program Files/Steam/steam.exe");
+        assert_eq!(rules[1]["outboundTag"], "direct");
+    }
+
+    #[test]
+    fn proxy_mode_ignores_the_application_policy() {
+        let apps = vec!["chrome".to_string()];
+        let config = render_config(&sample(), VpnMode::Proxy, None, AppPolicy::Only, &apps);
+        let rules = config["routing"]["rules"].as_array().unwrap();
+        assert_eq!(rules.len(), 1);
+        assert!(rules[0]["process"].is_null());
+    }
+
+    #[test]
     fn config_targets_profile_outbound() {
-        let config = render_config(&sample(), VpnMode::Proxy, None);
+        let config = render_config(&sample(), VpnMode::Proxy, None, AppPolicy::All, &[]);
         let outbound = &config["outbounds"][0];
         assert_eq!(outbound["protocol"], "vless");
         assert_eq!(outbound["settings"]["vnext"][0]["address"], "chat.example.com");

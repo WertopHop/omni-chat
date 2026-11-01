@@ -4,12 +4,15 @@ import type { StoredAuth } from "../lib/session";
 import {
   applyVpnProfile,
   fetchVpnProfile,
+  listVpnProcesses,
   readVpnStatus,
+  setVpnApps,
   setVpnMode,
   startVpn,
   stopVpn,
   toVpnIssue,
   vpnAvailable,
+  type AppPolicy,
   type VpnIssue,
   type VpnMode,
   type VpnStatus,
@@ -22,6 +25,9 @@ const STATUS_POLL_MS = 2500;
  * into a loop of prompts.
  */
 const RECONNECT_DELAYS_MS = [2000, 5000, 10000];
+
+/** Kept outside the hook so the empty case does not allocate on every render. */
+const EMPTY_APPS: string[] = [];
 
 /**
  * Owns the local tunnel: pulls the profile for the current session, mirrors the
@@ -191,18 +197,63 @@ export function useVpn(auth: StoredAuth) {
     }
   }, [available, syncProfile]);
 
+  /**
+   * Saving the list is cheap and stays off the `busy` flag: a running tunnel
+   * keeps its rules until the user reconnects, so nothing can hang here.
+   */
+  const saveApps = useCallback(
+    async (policy: AppPolicy, apps: string[]) => {
+      if (!available) return;
+      try {
+        apply(await setVpnApps(policy, apps));
+      } catch (appsError) {
+        setIssue(toVpnIssue(appsError));
+      }
+    },
+    [available, apply],
+  );
+
+  /** Brings the tunnel back so it picks up the saved application list. */
+  const applyApps = useCallback(async () => {
+    if (!available || busyRef.current) return;
+
+    busyRef.current = true;
+    setBusy(true);
+    setIssue(null);
+    try {
+      await stopVpn();
+      await connect();
+    } catch (appsError) {
+      setIssue(toVpnIssue(appsError));
+      try {
+        apply(await readVpnStatus());
+      } catch {
+        // keep the last known status
+      }
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }, [available, apply, connect]);
+
   return {
     available,
     mode: status?.mode ?? "proxy",
     connected: status?.running ?? false,
     elevated: status?.elevated ?? false,
     tunName: status?.tun_name ?? null,
+    policy: status?.policy ?? "all",
+    apps: status?.apps ?? EMPTY_APPS,
+    appsPending: status?.apps_pending ?? false,
     busy,
     reconnecting,
     issue,
     status,
     toggle,
     setMode: changeMode,
+    saveApps,
+    applyApps,
+    listProcesses: listVpnProcesses,
     refresh,
   };
 }

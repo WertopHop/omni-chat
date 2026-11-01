@@ -449,6 +449,8 @@ textarea {
   right: 16px;
   z-index: 20;
   width: 300px;
+  max-height: calc(100vh - 78px);
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -570,6 +572,123 @@ textarea {
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.vpn-apps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #33353b;
+}
+
+.vpn-apps-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.vpn-apps-head h4 {
+  flex: 1;
+  margin: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.vpn-apps-pending {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 11px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.vpn-apps-pending:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.vpn-apps-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vpn-apps-list li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px 2px 8px;
+  border-radius: 999px;
+  background: #31333a;
+  font-size: 11px;
+}
+
+.vpn-apps-list li.vpn-apps-empty {
+  padding: 0;
+  background: transparent;
+  color: var(--text-dim);
+}
+
+.vpn-apps-list button {
+  padding: 0 3px;
+  line-height: 1;
+}
+
+.vpn-apps-add {
+  display: flex;
+  gap: 6px;
+}
+
+.vpn-apps input:not([type="checkbox"]) {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid #3d3f46;
+  border-radius: 8px;
+  background: var(--bg-deep);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.vpn-apps input:not([type="checkbox"]):focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.vpn-apps-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vpn-apps-pick ul {
+  max-height: 150px;
+  margin: 0;
+  padding: 4px 6px;
+  overflow: auto;
+  border-radius: 8px;
+  background: #1b1c20;
+  list-style: none;
+}
+
+.vpn-apps-pick label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.vpn-apps-pick input[type="checkbox"] {
+  margin: 0;
 }
 
 .banner {

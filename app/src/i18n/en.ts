@@ -61,6 +61,26 @@ export const en = {
     "Proxy: the tunnel listens on a local SOCKS/HTTP port and the system proxy points at it. Applications that ignore the system proxy stay outside.",
   "vpn.mode.tunNote":
     "Full tunnel: every IPv4 and IPv6 connection of this machine goes through the server, and DNS is forced into the tunnel too. Windows asks for administrator rights once per connection.",
+  "vpn.apps.title": "Applications",
+  "vpn.apps.policy.all": "All",
+  "vpn.apps.policy.only": "Only",
+  "vpn.apps.policy.except": "Except",
+  "vpn.apps.note.all": "Every application goes through the tunnel.",
+  "vpn.apps.note.only":
+    "Only the listed applications go through the tunnel, everything else keeps the normal route. Loopback and LAN traffic always stays local.",
+  "vpn.apps.note.except":
+    "The listed applications keep the normal route, everything else goes through the tunnel.",
+  "vpn.apps.placeholder": "process name, e.g. chrome",
+  "vpn.apps.add": "Add",
+  "vpn.apps.empty": "Nothing picked yet.",
+  "vpn.apps.remove": "Remove {name}",
+  "vpn.apps.pick": "Pick running",
+  "vpn.apps.loading": "Reading processes…",
+  "vpn.apps.filter": "Filter",
+  "vpn.apps.loadFailed": "Could not read the running processes.",
+  "vpn.apps.pending": "reconnect to apply",
+  "vpn.apps.hint":
+    "Names are matched without the extension; a full path narrows the rule to one installation.",
   "vpn.fact.state": "State",
   "vpn.fact.server": "Server",
   "vpn.fact.socks": "Local SOCKS",

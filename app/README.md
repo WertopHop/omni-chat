@@ -49,7 +49,8 @@ through Tauri is still on the list.
 
 The tunnel lives in Rust: [`src-tauri/src/vpn.rs`](src-tauri/src/vpn.rs:1) renders a
 tunnel config from the profile and runs the sidecar. Both modes share the same
-outbound; the mode is picked in the panel and kept in `vpn/vpn-settings.json`.
+outbound; the mode and the application list are picked in the panel and kept in
+`vpn/vpn-settings.json`.
 
 1. `useVpn` asks the server for the profile: `GET /api/vpn/profile` with the
    session token (the gateway answers, so keys are only handed to known accounts).
@@ -87,6 +88,36 @@ An elevated tunnel has no stdout we could read, so its state is derived from the
 local SOCKS port: when it closes, the status turns into "stopped" with an error,
 which is what triggers the automatic reconnect.
 
+### Per-application rules
+
+Full tunnel mode can split traffic, and the panel offers three policies:
+
+- `All` — every connection goes through the tunnel (default);
+- `Only` — the listed applications go through the tunnel, everything else keeps
+  the normal route;
+- `Except` — the listed applications stay outside, everything else goes through.
+
+The engine maps a connection back to the process that owns the local address and
+port, so an entry is either a process name without the extension (`chrome`) or a
+full path (`C:/Program Files/Steam/steam.exe`). Names are taken from the "pick
+running" list, which reads them from the operating system, so the case matches the
+real image.
+
+Two details matter:
+
+- loopback and LAN ranges are matched before the application rules, so a local
+  server never travels through the tunnel;
+- in `Only` mode a catch-all sends the rest of the machine to the direct
+  outbound, because the tunnel is the first outbound and would otherwise stay
+  the default for everything.
+
+Proxy mode ignores the list: a loopback inbound cannot tell which process
+connected, and an application either points at the local port or it does not.
+
+The list is stored in `vpn-settings.json` next to the mode. Saving it does not
+touch a running tunnel, because new routes would cost another UAC prompt, so the
+panel shows "reconnect to apply" until the tunnel is restarted.
+
 ### Connection handling
 
 The hook remembers what the user asked for. After an unexpected drop, or when
@@ -98,8 +129,8 @@ Status, mode switch, logs and the toggle are shown in the panel behind the `VPN`
 in the chat header.
 
 Verify the path without the UI: proxy mode end to end, and the full tunnel config
-through the engine's `-test` switch (starting it needs rights, so it is not part of
-the script):
+plus both application policies through the engine's `-test` switch (starting the
+tunnel needs rights, so it is not part of the script):
 
 ```bash
 set NODE_EXTRA_CA_CERTS=..\server\generated\caddy-root.crt
@@ -168,7 +199,6 @@ Placeholders use `{name}` syntax.
 ## Roadmap
 
 - attachments, replies, reactions, DMs, member list;
-- per-app routing on top of the full tunnel;
 - voice channels via LiveKit, admin panel for invites and accounts.
 
 

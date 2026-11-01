@@ -1,6 +1,8 @@
+import { useState } from "react";
+
 import { useVpn } from "../hooks/useVpn";
-import { useI18n, type Translate } from "../i18n";
-import type { VpnIssue, VpnMode } from "../lib/vpn";
+import { useI18n, type MessageKey, type Translate } from "../i18n";
+import type { AppPolicy, VpnIssue, VpnMode } from "../lib/vpn";
 
 type Props = {
   vpn: ReturnType<typeof useVpn>;
@@ -8,6 +10,21 @@ type Props = {
 };
 
 const MODES: VpnMode[] = ["proxy", "tun"];
+
+const POLICIES: { value: AppPolicy; label: MessageKey }[] = [
+  { value: "all", label: "vpn.apps.policy.all" },
+  { value: "only", label: "vpn.apps.policy.only" },
+  { value: "except", label: "vpn.apps.policy.except" },
+];
+
+const POLICY_NOTE: Record<AppPolicy, MessageKey> = {
+  all: "vpn.apps.note.all",
+  only: "vpn.apps.note.only",
+  except: "vpn.apps.note.except",
+};
+
+/** The engine compares process names case-sensitively; the UI keeps them sane. */
+const MAX_PICKER_ROWS = 80;
 
 function formatUptime(connectedAt: number | null, t: Translate): string {
   if (!connectedAt) return t("errors.common.dash");
@@ -22,6 +39,175 @@ function formatUptime(connectedAt: number | null, t: Translate): string {
 
 function describeIssue(issue: VpnIssue, t: Translate): string {
   return "text" in issue ? issue.text : t(issue.key, issue.params);
+}
+
+function hasApp(apps: string[], name: string): boolean {
+  return apps.some((known) => known.toLowerCase() === name.toLowerCase());
+}
+
+function toggleApp(apps: string[], name: string): string[] {
+  return hasApp(apps, name) ? apps.filter((known) => known.toLowerCase() !== name.toLowerCase()) : [...apps, name];
+}
+
+type AppsProps = {
+  policy: AppPolicy;
+  apps: string[];
+  pending: boolean;
+  disabled: boolean;
+  onChange: (policy: AppPolicy, apps: string[]) => void;
+  onApply: () => void;
+  onList: () => Promise<string[]>;
+};
+
+/**
+ * Application list for full tunnel mode. Picking from the running processes is
+ * the reliable path because the engine matches the name exactly as the system
+ * reports it; typing is there for something that is not running right now.
+ */
+function AppsSection({ policy, apps, pending, disabled, onChange, onApply, onList }: AppsProps) {
+  const { t } = useI18n();
+  const [draft, setDraft] = useState("");
+  const [filter, setFilter] = useState("");
+  const [running, setRunning] = useState<string[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+
+  async function load() {
+    if (loading) return;
+    if (running) {
+      setRunning(null);
+      setFilter("");
+      return;
+    }
+    setLoading(true);
+    setFailure(null);
+    try {
+      setRunning(await onList());
+    } catch {
+      setFailure(t("vpn.apps.loadFailed"));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function add() {
+    const name = draft.trim();
+    if (!name) return;
+    onChange(policy, hasApp(apps, name) ? apps : [...apps, name]);
+    setDraft("");
+  }
+
+  const needle = filter.trim().toLowerCase();
+  const shown = (running ?? [])
+    .filter((name) => name.toLowerCase().includes(needle))
+    .slice(0, MAX_PICKER_ROWS);
+
+  return (
+    <section className="vpn-apps">
+      <div className="vpn-apps-head">
+        <h4>{t("vpn.apps.title")}</h4>
+        {pending && (
+          <button
+            type="button"
+            className="vpn-apps-pending"
+            disabled={disabled}
+            onClick={onApply}
+          >
+            {t("vpn.apps.pending")}
+          </button>
+        )}
+      </div>
+
+      <div className="vpn-modes" role="group" aria-label={t("vpn.apps.title")}>
+        {POLICIES.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={policy === option.value ? "vpn-mode active" : "vpn-mode"}
+            aria-pressed={policy === option.value}
+            disabled={disabled}
+            onClick={() => onChange(option.value, apps)}
+          >
+            {t(option.label)}
+          </button>
+        ))}
+      </div>
+
+      <p className="vpn-note">{t(POLICY_NOTE[policy])}</p>
+
+      {policy !== "all" && (
+        <>
+          <ul className="vpn-apps-list">
+            {apps.length === 0 && <li className="vpn-apps-empty">{t("vpn.apps.empty")}</li>}
+            {apps.map((name) => (
+              <li key={name}>
+                <span>{name}</span>
+                <button
+                  type="button"
+                  className="ghost small"
+                  title={t("vpn.apps.remove", { name })}
+                  aria-label={t("vpn.apps.remove", { name })}
+                  onClick={() => onChange(policy, apps.filter((known) => known !== name))}
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          <form
+            className="vpn-apps-add"
+            onSubmit={(event) => {
+              event.preventDefault();
+              add();
+            }}
+          >
+            <input
+              value={draft}
+              placeholder={t("vpn.apps.placeholder")}
+              disabled={disabled}
+              onChange={(event) => setDraft(event.target.value)}
+            />
+            <button className="ghost small" type="submit" disabled={disabled || !draft.trim()}>
+              {t("vpn.apps.add")}
+            </button>
+          </form>
+
+          <button className="ghost small" type="button" onClick={load} disabled={disabled || loading}>
+            {loading ? t("vpn.apps.loading") : t("vpn.apps.pick")}
+          </button>
+
+          {failure && <div className="error">{failure}</div>}
+
+          {running && (
+            <div className="vpn-apps-pick">
+              <input
+                value={filter}
+                placeholder={t("vpn.apps.filter")}
+                onChange={(event) => setFilter(event.target.value)}
+              />
+              <ul>
+                {shown.map((name) => (
+                  <li key={name}>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={hasApp(apps, name)}
+                        onChange={() => onChange(policy, toggleApp(apps, name))}
+                      />
+                      <span>{name}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <p className="vpn-note">{t("vpn.apps.hint")}</p>
+        </>
+      )}
+    </section>
+  );
 }
 
 export function VpnPanel({ vpn, onClose }: Props) {
@@ -96,6 +282,18 @@ export function VpnPanel({ vpn, onClose }: Props) {
             <dt>{t("vpn.fact.uptime")}</dt>
             <dd>{formatUptime(status?.connected_at ?? null, t)}</dd>
           </dl>
+
+          {mode === "tun" && (
+            <AppsSection
+              policy={vpn.policy}
+              apps={vpn.apps}
+              pending={vpn.appsPending}
+              disabled={busy}
+              onChange={vpn.saveApps}
+              onApply={vpn.applyApps}
+              onList={vpn.listProcesses}
+            />
+          )}
 
           {issue && <div className="error">{describeIssue(issue, t)}</div>}
 

@@ -20,6 +20,8 @@ pub fn run() {
             vpn::vpn_set_profile,
             vpn::vpn_clear_profile,
             vpn::vpn_set_mode,
+            vpn::vpn_set_apps,
+            vpn::vpn_list_processes,
             vpn::vpn_start,
             vpn::vpn_stop,
             vpn::vpn_status
