@@ -21,6 +21,10 @@ npm run dev        # Vite only, in a browser
 npm run build      # type-check + production bundle
 npm run tauri dev  # desktop window with hot reload
 npm run tauri build
+
+npm run smoke       # chat round-trip against a running server
+npm run smoke:vpn   # tunnel profile, engine config, exit address
+npm run smoke:voice # voice token and signalling
 ```
 
 `npm run fetch:tunnel` is required once before the desktop build: the binaries are
@@ -137,6 +141,43 @@ set NODE_EXTRA_CA_CERTS=..\server\generated\caddy-root.crt
 npm run smoke:vpn
 ```
 
+## Voice
+
+A voice channel here is a text channel that carries a `voice` block, so the
+sidebar splits channels on `channel.isVoice` and joins with
+`POST /api/channels/<id>/join_call`.
+
+- [`src/hooks/useVoice.ts`](src/hooks/useVoice.ts:1) owns the LiveKit room: joining
+  another channel leaves the previous one, closing the window disconnects, and the
+  node name for the join token comes from `features.livekit.nodes` in the API root
+  (the backend rejects a token request without a node).
+- [`src/lib/voice.ts`](src/lib/voice.ts:1) turns the room into a small view model
+  (name, muted, speaking) and implements deafen by zeroing the remote audio tracks.
+- [`src/components/VoiceBar.tsx`](src/components/VoiceBar.tsx:1) renders the call
+  strip in the sidebar: participants with a speaking highlight, mute, deafen and
+  leave.
+
+Deafen also mutes the microphone and restores the previous microphone state on the
+way out, which is what a voice client is expected to do. A denied microphone does
+not end the call: it connects muted and the bar says why. The desktop shell answers
+the webview permission prompt itself (`on_permission_request` in
+`src-tauri/src/lib.rs`), so no dialog gets in the way.
+
+Signalling goes through the reverse proxy (`wss://<domain>/livekit`) while media
+flows directly over `7881/tcp` and the UDP range, which keeps a full tunnel
+carrying the media too.
+
+Check the chain without a microphone:
+
+```bash
+set NODE_EXTRA_CA_CERTS=..\server\generated\caddy-root.crt
+npm run smoke:voice
+```
+
+It registers an account, creates a voice channel, asks for a token, verifies that
+the token points at the right room and that the signalling endpoint accepts it.
+Node has no WebRTC, so the media path itself is only exercised by the desktop app.
+
 ## Local development against `server/`
 
 `server/` uses Caddy's internal CA for `https://localhost`, and the webview
@@ -145,9 +186,13 @@ rejects unknown CAs. Either:
 - trust Caddy's root certificate once:
 
   ```bash
-  docker compose -f ../server/compose.yml exec caddy cat /data/caddy/pki/authorities/local/root.crt > caddy-root.crt
-  certutil -user -addstore Root caddy-root.crt
+  docker compose -f ../server/compose.yml exec -T caddy cat /data/caddy/pki/authorities/local/root.crt > ../server/generated/caddy-root.crt
+  certutil -user -addstore Root ../server/generated/caddy-root.crt
   ```
+
+  Run this from `cmd`, or use `Out-File -Encoding ascii` from PowerShell: a plain
+  `>` in PowerShell writes UTF-16, and Node then fails to build the chain from
+  that file.
 
 - or point the app at the deployed server with a real certificate.
 

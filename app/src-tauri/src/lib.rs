@@ -1,5 +1,6 @@
 mod vpn;
 
+use tauri::webview::{PermissionKind, PermissionResponse};
 use tauri::Manager;
 
 // Background tasks (VPN sidecar) must not outlive the window.
@@ -15,6 +16,14 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
+        // Voice needs the microphone; the webview asks the host once and would
+        // otherwise leave the request unanswered. Everything else keeps the
+        // default behaviour so the page cannot grant itself more than a
+        // browser would hand it.
+        .on_permission_request(|_webview, permission| match permission {
+            PermissionKind::Microphone => PermissionResponse::Allow,
+            _ => PermissionResponse::Default,
+        })
         .manage(vpn::VpnState::default())
         .invoke_handler(tauri::generate_handler![
             vpn::vpn_set_profile,

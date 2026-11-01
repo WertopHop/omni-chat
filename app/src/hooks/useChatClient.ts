@@ -4,7 +4,7 @@
  * Solid stores inside the SDK do not notify React, so components re-read
  * collections whenever `revision` changes (any relevant event bumps it).
  */
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Client } from "stoat.js";
 
 import { fetchServerInfo } from "../lib/server";
@@ -20,6 +20,9 @@ export function useChatClient(serverUrl: string, session: Session) {
   const [connected, setConnected] = useState(false);
   const [revision, setRevision] = useState(0);
   const [failure, setFailure] = useState<string | null>(null);
+
+  /** Lets callers force a re-read after a mutation the server does not echo. */
+  const refresh = useCallback(() => setRevision((value) => value + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,6 +46,8 @@ export function useChatClient(serverUrl: string, session: Session) {
     client.on("disconnected", () => setConnected(false));
     client.on("messageCreate", bump);
     client.on("messageUpdate", bump);
+    client.on("channelCreate", bump);
+    client.on("channelDelete", bump);
     client.on("error", handleError);
 
     // The websocket address comes from the API root payload, without it the
@@ -66,5 +71,5 @@ export function useChatClient(serverUrl: string, session: Session) {
     };
   }, [client, serverUrl, session]);
 
-  return { client, ready, connected, revision, failure };
+  return { client, ready, connected, revision, failure, refresh };
 }

@@ -10,11 +10,13 @@
     "tauri": "tauri",
     "fetch:tunnel": "node scripts/fetch-tunnel-core.mjs",
     "smoke": "node scripts/chat-smoke-test.mjs",
-    "smoke:vpn": "node scripts/vpn-smoke-test.mjs"
+    "smoke:vpn": "node scripts/vpn-smoke-test.mjs",
+    "smoke:voice": "node scripts/voice-smoke-test.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
+    "livekit-client": "^2.23.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "stoat.js": "^7.3.6"
