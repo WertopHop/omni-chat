@@ -152,16 +152,29 @@ sidebar splits channels on `channel.isVoice` and joins with
   node name for the join token comes from `features.livekit.nodes` in the API root
   (the backend rejects a token request without a node).
 - [`src/lib/voice.ts`](src/lib/voice.ts:1) turns the room into a small view model
-  (name, muted, speaking) and implements deafen by zeroing the remote audio tracks.
+  (name, muted, speaking), keeps the audio device list, applies deafen and the
+  per-participant volume to the remote tracks, and samples the microphone level.
 - [`src/components/VoiceBar.tsx`](src/components/VoiceBar.tsx:1) renders the call
-  strip in the sidebar: participants with a speaking highlight, mute, deafen and
-  leave.
+  strip in the sidebar: participants with a speaking highlight and a volume slider,
+  the microphone meter, the device picker, mute, deafen and leave.
 
 Deafen also mutes the microphone and restores the previous microphone state on the
 way out, which is what a voice client is expected to do. A denied microphone does
 not end the call: it connects muted and the bar says why. The desktop shell answers
 the webview permission prompt itself (`on_permission_request` in
 `src-tauri/src/lib.rs`), so no dialog gets in the way.
+
+Audio devices come from `navigator.mediaDevices.enumerateDevices()`; entries that
+share a label are collapsed because the browser reports both a `default` alias and
+the real device. The chosen microphone is passed to the room as
+`audioCaptureDefaults` on the next join and switched live with
+`switchActiveDevice`, the output the same way once a call is up. The meter under
+the channel name is computed from the track the room already publishes, so it also
+works as a microphone test without a second capture.
+
+Channels only exist inside a server, so a fresh account first creates one from the
+sidebar or the `+` in the server rail; the backend adds a `General` text channel
+and the voice section appears next to it.
 
 Signalling goes through the reverse proxy (`wss://<domain>/livekit`) while media
 flows directly over `7881/tcp` and the UDP range, which keeps a full tunnel
@@ -244,7 +257,9 @@ Placeholders use `{name}` syntax.
 ## Roadmap
 
 - attachments, replies, reactions, DMs, member list;
-- voice channels via LiveKit, admin panel for invites and accounts.
+- admin panel for invites and accounts;
+- membership invites from the client, so a second account does not need the
+  server-side script.
 
 
 ---

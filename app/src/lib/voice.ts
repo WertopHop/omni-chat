@@ -76,16 +76,9 @@ export async function listAudioDevices(): Promise<AudioDevices> {
 
 /**
  * Deafen is a listener-side setting, so it is applied to the remote audio
- * tracks instead of the microphone: 0 keeps the music off while the call stays
- * connected, and it has to be repeated for anyone who joins later.
- */
-export function setRemoteVolume(room: Room, volume: number): void {
-  room.remoteParticipants.forEach((participant) => participant.setVolume(volume));
-}
-
-/**
- * Per-peer volume has to survive deafen, so it is stored per identity and
- * re-applied on undeafen and on late joiners instead of being a global slider.
+ * tracks instead of the microphone: 0 keeps the sound off while the call stays
+ * connected. Per-peer volume is stored per identity and re-applied here, so
+ * undeafen and late joiners both get the right level.
  */
 export function applyPeerVolumes(
   room: Room,
